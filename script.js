@@ -61,19 +61,26 @@ function calcular() {
     const mediaB_marc = mean(golsB);
     const mediaB_sof = mean(golsSofridosB);
 
-    // Força relativa
+    // Força relativa (corrigida)
     const avgMarc = (mediaA_marc + mediaB_marc) / 2 || 0.5;
     const avgSof = (mediaA_sof + mediaB_sof) / 2 || 0.5;
 
+    // Força ofensiva (mantida)
     const forcaOffA = mediaA_marc / avgMarc;
     const forcaOffB = mediaB_marc / avgMarc;
+    // Função de limite (pode ficar dentro de calcular)
+    const clamp = (x, min, max) => Math.min(Math.max(x, min), max);
 
-    const forcaDefA = mediaA_sof / avgSof;
-    const forcaDefB = mediaB_sof / avgSof;
+    // Força defensiva (corrigida + limitada)
+    const forcaDefA = clamp(avgSof / (mediaA_sof || 0.5), 0.6, 1.4);
+    const forcaDefB = clamp(avgSof / (mediaB_sof || 0.5), 0.6, 1.4);
 
-    // Base do lambda Poisson
-    let lambdaA = mediaA_marc * forcaDefB;
-    let lambdaB = mediaB_marc * forcaDefA;
+
+    // Lambda base Poisson (ofensa × defesa adversária)
+    let lambdaA = forcaOffA * forcaDefB * avgMarc;
+    let lambdaB = forcaOffB * forcaDefA * avgMarc;
+
+
 
     // Fator H2H
     const mediaH2HA = mean(h2hA);
@@ -243,9 +250,20 @@ function preencherExemplo() {
 // LIMPAR
 // ========================
 function limpar() {
-    document.querySelectorAll("input[type='number']").forEach(i => i.value = "");
+    document.querySelectorAll("input[type='number']").forEach(i => i.value = 0);
     setHTML("resultado", "");
-    if (chartTotal) chartTotal.destroy();
-    if (chartScores) chartScores.destroy();
+
+    if (chartTotal) {
+        chartTotal.destroy();
+        chartTotal = null;
+    }
+
+    if (chartScores) {
+        chartScores.destroy();
+        chartScores = null;
+    }
 }
+
+
+
 

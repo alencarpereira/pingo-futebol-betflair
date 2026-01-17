@@ -122,6 +122,34 @@ button:hover {
     opacity: 0.9;
 }
 
+.favoritismo {
+    padding: 12px;
+    margin: 15px 0;
+    border-radius: 6px;
+    font-size: 16px;
+    text-align: center;
+    font-weight: bold;
+}
+
+.favoritoA {
+    background: #e8f7e8;
+    color: #1e7e34;
+    border: 2px solid #1e7e34;
+}
+
+.favoritoB {
+    background: #fdecea;
+    color: #a71d2a;
+    border: 2px solid #a71d2a;
+}
+
+.equilibrado {
+    background: #f4f4f4;
+    color: #444;
+    border: 2px solid #999;
+}
+
+
 /* Gráficos */
 canvas {
     margin-bottom: 20px;
