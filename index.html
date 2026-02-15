@@ -10,21 +10,28 @@
 
 <body>
     <div class="container">
+
         <h3>Calculadora de Gols - Modelo Poisson</h3>
 
-        <div class="favoritismo-container">
+        <!-- ================= FAVORITISMO ================= -->
+        <div class="card favoritismo-container">
             <label>Peso de Favoritismo</label>
+
             <input type="range" id="favA" min="0" max="100" value="50" oninput="atualizarFavoritismo()">
 
             <input type="number" id="favB" value="50" disabled>
-            <div id="favValores" class="fav-texto">Time A: 50% — Time B: 50%</div>
+
+            <div id="favValores" class="fav-texto">
+                Time A: 50% — Time B: 50%
+            </div>
         </div>
 
-
+        <!-- ================= DADOS DOS TIMES ================= -->
         <div class="card">
-            <!-- Time A -->
+
             <div class="coluna">
                 <h4>Time A - Últimos 5 Jogos</h4>
+
                 <label>Gols Marcados:</label>
                 <div class="inputs-jogos">
                     <input type="number" class="golsA" placeholder="0">
@@ -33,6 +40,7 @@
                     <input type="number" class="golsA" placeholder="0">
                     <input type="number" class="golsA" placeholder="0">
                 </div>
+
                 <label>Gols Sofridos:</label>
                 <div class="inputs-jogos">
                     <input type="number" class="golsSofridosA" placeholder="0">
@@ -43,9 +51,9 @@
                 </div>
             </div>
 
-            <!-- Time B -->
             <div class="coluna">
                 <h4>Time B - Últimos 5 Jogos</h4>
+
                 <label>Gols Marcados:</label>
                 <div class="inputs-jogos">
                     <input type="number" class="golsB" placeholder="0">
@@ -54,6 +62,7 @@
                     <input type="number" class="golsB" placeholder="0">
                     <input type="number" class="golsB" placeholder="0">
                 </div>
+
                 <label>Gols Sofridos:</label>
                 <div class="inputs-jogos">
                     <input type="number" class="golsSofridosB" placeholder="0">
@@ -64,42 +73,50 @@
                 </div>
             </div>
 
-            <!-- Confronto direto -->
-            <h4>Confronto Direto - Últimos 5 Jogos</h4>
-            <div class="coluna">
-                <label>Time A:</label>
-                <div class="inputs-jogos">
-                    <input type="number" class="h2hA" placeholder="0">
-                    <input type="number" class="h2hA" placeholder="0">
-                    <input type="number" class="h2hA" placeholder="0">
-                    <input type="number" class="h2hA" placeholder="0">
-                    <input type="number" class="h2hA" placeholder="0">
-                </div>
-            </div>
-            <div class="coluna">
-                <label>Time B:</label>
-                <div class="inputs-jogos">
-                    <input type="number" class="h2hB" placeholder="0">
-                    <input type="number" class="h2hB" placeholder="0">
-                    <input type="number" class="h2hB" placeholder="0">
-                    <input type="number" class="h2hB" placeholder="0">
-                    <input type="number" class="h2hB" placeholder="0">
-                </div>
-            </div>
-
-            <!-- Botões -->
-            <div class="botoes">
-                <button class="btn-calc" onclick="calcular()">Gerar Resultado</button>
-                <button class="btn-exemplo" onclick="preencherExemplo()">Preencher Exemplo</button>
-                <button class="btn-limpar" onclick="limpar()">Limpar</button>
-            </div>
         </div>
 
+        <!-- ================= CONFRONTO DIRETO ================= -->
+        <div class="card">
 
-        <!-- Resultado e gráficos -->
+            <h4>Confronto Direto - Últimos 5 Jogos</h4>
+
+            <div class="coluna">
+                <label>Gols Time A:</label>
+                <div class="inputs-jogos">
+                    <input type="number" class="h2hA" placeholder="0">
+                    <input type="number" class="h2hA" placeholder="0">
+                    <input type="number" class="h2hA" placeholder="0">
+                    <input type="number" class="h2hA" placeholder="0">
+                    <input type="number" class="h2hA" placeholder="0">
+                </div>
+            </div>
+
+            <div class="coluna">
+                <label>Gols Time B:</label>
+                <div class="inputs-jogos">
+                    <input type="number" class="h2hB" placeholder="0">
+                    <input type="number" class="h2hB" placeholder="0">
+                    <input type="number" class="h2hB" placeholder="0">
+                    <input type="number" class="h2hB" placeholder="0">
+                    <input type="number" class="h2hB" placeholder="0">
+                </div>
+            </div>
+
+        </div>
+
+        <!-- ================= BOTÕES ================= -->
+        <div class="card botoes">
+            <button class="btn-calc" onclick="calcular()">Gerar Resultado</button>
+            <button class="btn-exemplo" onclick="preencherExemplo()">Preencher Exemplo</button>
+            <button class="btn-limpar" onclick="limpar()">Limpar</button>
+        </div>
+
+        <!-- ================= RESULTADOS ================= -->
         <div id="resultado" class="card"></div>
+
         <canvas id="graficoGols" height="150"></canvas>
         <canvas id="graficoPlacares" height="200"></canvas>
+
     </div>
 
     <script src="script.js"></script>

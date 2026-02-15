@@ -1,10 +1,26 @@
-// ========================
+// ===============================
+// CONFIG
+// ===============================
+const MAX_GOALS = 6;
+let chartGols = null;
+let chartPlacares = null;
+
+// ===============================
 // HELPERS
-// ========================
+// ===============================
 function mean(arr) {
-    const nums = arr.map(Number).filter(n => !isNaN(n));
-    if (nums.length === 0) return 0;
-    return nums.reduce((a, b) => a + b, 0) / nums.length;
+    const valid = arr.map(Number).filter(n => !isNaN(n));
+    if (valid.length === 0) return 0;
+    return valid.reduce((a, b) => a + b, 0) / valid.length;
+}
+
+function getValues(selector) {
+    return Array.from(document.querySelectorAll(selector))
+        .map(i => parseFloat(i.value) || 0);
+}
+
+function poisson(lambda, k) {
+    return (Math.pow(lambda, k) * Math.exp(-lambda)) / factorial(k);
 }
 
 function factorial(n) {
@@ -14,255 +30,220 @@ function factorial(n) {
     return f;
 }
 
-function poissonP(lambda, k) {
-    if (lambda <= 0) return k === 0 ? 1 : 0;
-    return Math.pow(lambda, k) * Math.exp(-lambda) / factorial(k);
-}
-
-function getValuesByClass(cls) {
-    return Array.from(document.querySelectorAll(`.${cls}`)).map(i => {
-        const v = parseFloat(i.value);
-        return isNaN(v) ? 0 : v;
-    });
-}
-
-function setHTML(id, html) {
-    const e = document.getElementById(id);
-    if (e) e.innerHTML = html;
-}
-
-// ========================
+// ===============================
 // FAVORITISMO
-// ========================
+// ===============================
 function atualizarFavoritismo() {
-    const favA = parseInt(document.getElementById("favA").value) || 50;
+    const favA = document.getElementById("favA").value;
     const favB = 100 - favA;
 
     document.getElementById("favB").value = favB;
-    document.getElementById("favValores").textContent = `Time A: ${favA}% — Time B: ${favB}%`;
+    document.getElementById("favValores").innerText =
+        `Time A: ${favA}% — Time B: ${favB}%`;
 }
 
-// ========================
+// ===============================
 // CALCULAR
-// ========================
+// ===============================
 function calcular() {
 
-    // Dados
-    const golsA = getValuesByClass("golsA");
-    const golsSofridosA = getValuesByClass("golsSofridosA");
-    const golsB = getValuesByClass("golsB");
-    const golsSofridosB = getValuesByClass("golsSofridosB");
-    const h2hA = getValuesByClass("h2hA");
-    const h2hB = getValuesByClass("h2hB");
+    // ===== MÉDIAS =====
+    const golsA = mean(getValues(".golsA"));
+    const sofridosA = mean(getValues(".golsSofridosA"));
+    const golsB = mean(getValues(".golsB"));
+    const sofridosB = mean(getValues(".golsSofridosB"));
 
-    // Médias
-    const mediaA_marc = mean(golsA);
-    const mediaA_sof = mean(golsSofridosA);
-    const mediaB_marc = mean(golsB);
-    const mediaB_sof = mean(golsSofridosB);
+    const h2hA = mean(getValues(".h2hA"));
+    const h2hB = mean(getValues(".h2hB"));
 
-    // Força relativa (corrigida)
-    const avgMarc = (mediaA_marc + mediaB_marc) / 2 || 0.5;
-    const avgSof = (mediaA_sof + mediaB_sof) / 2 || 0.5;
-
-    // Força ofensiva (mantida)
-    const forcaOffA = mediaA_marc / avgMarc;
-    const forcaOffB = mediaB_marc / avgMarc;
-    // Função de limite (pode ficar dentro de calcular)
-    const clamp = (x, min, max) => Math.min(Math.max(x, min), max);
-
-    // Força defensiva (corrigida + limitada)
-    const forcaDefA = clamp(avgSof / (mediaA_sof || 0.5), 0.6, 1.4);
-    const forcaDefB = clamp(avgSof / (mediaB_sof || 0.5), 0.6, 1.4);
-
-
-    // Lambda base Poisson (ofensa × defesa adversária)
-    let lambdaA = forcaOffA * forcaDefB * avgMarc;
-    let lambdaB = forcaOffB * forcaDefA * avgMarc;
-
-
-
-    // Fator H2H
-    const mediaH2HA = mean(h2hA);
-    const mediaH2HB = mean(h2hB);
-
-    const h2hFactorA = (mediaH2HA + 0.01) / ((mediaA_marc || 0.01) + 0.01);
-    const h2hFactorB = (mediaH2HB + 0.01) / ((mediaB_marc || 0.01) + 0.01);
-
-    lambdaA *= Math.min(Math.max(h2hFactorA, 0.8), 1.2);
-    lambdaB *= Math.min(Math.max(h2hFactorB, 0.8), 1.2);
-
-    // Fator de Favoritismo
-    const favA = (parseInt(document.getElementById("favA").value) || 50) / 100;
+    const favA = parseFloat(document.getElementById("favA").value) / 100;
     const favB = 1 - favA;
 
-    lambdaA *= (0.8 + favA * 0.4);
-    lambdaB *= (0.8 + favB * 0.4);
+    // ===== LAMBDA AJUSTADO =====
+    let lambdaA = ((golsA + sofridosB) / 2) * (0.7 + favA * 0.6);
+    let lambdaB = ((golsB + sofridosA) / 2) * (0.7 + favB * 0.6);
 
-    // Limitar lambdas
-    lambdaA = Math.max(0.05, Math.min(lambdaA, 6));
-    lambdaB = Math.max(0.05, Math.min(lambdaB, 6));
+    // Peso confronto direto
+    if (h2hA > 0 || h2hB > 0) {
+        lambdaA = (lambdaA * 0.8) + (h2hA * 0.2);
+        lambdaB = (lambdaB * 0.8) + (h2hB * 0.2);
+    }
 
-    // Matriz de probabilidades
-    const N = 7;
-    const matrix = Array.from({ length: N + 1 }, () => Array(N + 1).fill(0));
+    // ===== MATRIZ DE PROBABILIDADES =====
+    let matriz = [];
+    let probOver25 = 0;
+    let probBTTS = 0;
+    let probA = 0;
+    let probEmpate = 0;
+    let probB = 0;
 
-    for (let i = 0; i <= N; i++) {
-        const pA = poissonP(lambdaA, i);
-        for (let j = 0; j <= N; j++) {
-            matrix[i][j] = pA * poissonP(lambdaB, j);
+    let melhorPlacar = { prob: 0, placar: "0x0" };
+
+    for (let i = 0; i <= MAX_GOALS; i++) {
+        for (let j = 0; j <= MAX_GOALS; j++) {
+
+            const pA = poisson(lambdaA, i);
+            const pB = poisson(lambdaB, j);
+            const prob = pA * pB;
+
+            matriz.push({ i, j, prob });
+
+            if (i + j > 2.5) probOver25 += prob;
+            if (i > 0 && j > 0) probBTTS += prob;
+
+            if (i > j) probA += prob;
+            if (i === j) probEmpate += prob;
+            if (j > i) probB += prob;
+
+            if (prob > melhorPlacar.prob) {
+                melhorPlacar = {
+                    prob,
+                    placar: `${i}x${j}`
+                };
+            }
         }
     }
 
-    // Indicadores principais
-    let over25 = 0;
-    let under25 = 0;
-    let bttsSim = 0;
-    let bttsNao = 0;
-    const p00 = matrix[0][0];
+    // ===============================
+    // INTERPRETAÇÃO
+    // ===============================
 
-    const scoreProbs = [];
+    let interpretacao = "";
+    let sugestao = "";
 
-    for (let i = 0; i <= N; i++) {
-        for (let j = 0; j <= N; j++) {
-            const p = matrix[i][j];
+    const mediaTotal = lambdaA + lambdaB;
 
-            if (i + j >= 3) over25 += p;
-            else under25 += p;
-
-            if (i > 0 && j > 0) bttsSim += p;
-            else bttsNao += p;
-
-            scoreProbs.push({ score: `${i}x${j}`, prob: p });
-        }
+    // Tendência ofensiva
+    if (mediaTotal > 2.6 || probOver25 > 0.6) {
+        interpretacao += "Jogo com tendência ofensiva. ";
+    } else if (mediaTotal < 2.2) {
+        interpretacao += "Jogo com tendência mais equilibrada e poucos gols. ";
+    } else {
+        interpretacao += "Partida com cenário moderado de gols. ";
     }
 
-    // Ordenar placares
-    scoreProbs.sort((a, b) => b.prob - a.prob);
+    // Superioridade
+    if (lambdaA > lambdaB + 0.4) {
+        interpretacao += "Time A apresenta superioridade estatística. ";
+    } else if (lambdaB > lambdaA + 0.4) {
+        interpretacao += "Time B apresenta superioridade estatística. ";
+    } else {
+        interpretacao += "Confronto equilibrado sem favorito claro. ";
+    }
 
-    const pct = x => (x * 100).toFixed(1) + "%";
+    // BTTS
+    if (probBTTS > 0.55) {
+        interpretacao += "Alta probabilidade de ambas equipes marcarem. ";
+    } else if (probBTTS < 0.45) {
+        interpretacao += "Baixa probabilidade de ambas marcarem. ";
+    }
 
-    // Mostrar resultados
-    const html = `
-    <h4>Resultados — Expectativas</h4>
-    <table>
-      <tr><th>Indicador</th><th>Probabilidade</th></tr>
-      <tr><td>Over 2.5</td><td>${pct(over25)}</td></tr>
-      <tr><td>Under 2.5</td><td>${pct(under25)}</td></tr>
-      <tr><td>Ambos Marcam — Sim</td><td>${pct(bttsSim)}</td></tr>
-      <tr><td>Ambos Marcam — Não</td><td>${pct(bttsNao)}</td></tr>
-      <tr><td>0x0</td><td>${pct(p00)}</td></tr>
-    </table>
+    interpretacao += `Expectativa média de ${mediaTotal.toFixed(2)} gols.`;
 
-    <h4>Top 6 placares mais prováveis</h4>
-    <table>
-      <tr><th>Placar</th><th>Probabilidade</th></tr>
-      ${scoreProbs.slice(0, 6).map(s =>
-        `<tr><td>${s.score}</td><td>${pct(s.prob)}</td></tr>`
-    ).join("")}
-    </table>
+    // ===== MERCADO MAIS FORTE =====
+    const mercados = [
+        { nome: "Over 2.5 gols", valor: probOver25 },
+        { nome: "Under 2.5 gols", valor: 1 - probOver25 },
+        { nome: "BTTS - Sim", valor: probBTTS },
+        { nome: "Vitória Time A", valor: probA },
+        { nome: "Empate", valor: probEmpate },
+        { nome: "Vitória Time B", valor: probB }
+    ];
+
+    mercados.sort((a, b) => b.valor - a.valor);
+    sugestao = mercados[0].nome;
+
+    // ===============================
+    // SAÍDA
+    // ===============================
+    document.getElementById("resultado").innerHTML = `
+        <h3>📊 Análise Estatística</h3>
+        <p><strong>Placar mais provável:</strong> ${melhorPlacar.placar}</p>
+        <p><strong>Over 2.5:</strong> ${(probOver25 * 100).toFixed(1)}%</p>
+        <p><strong>BTTS:</strong> ${(probBTTS * 100).toFixed(1)}%</p>
+        <p><strong>Vitória A:</strong> ${(probA * 100).toFixed(1)}%</p>
+        <p><strong>Empate:</strong> ${(probEmpate * 100).toFixed(1)}%</p>
+        <p><strong>Vitória B:</strong> ${(probB * 100).toFixed(1)}%</p>
+        <hr>
+        <h4>🧠 Interpretação:</h4>
+        <p>${interpretacao}</p>
+        <h4>🎯 Sugestão estatística:</h4>
+        <p>Mercado com melhor projeção: <strong>${sugestao}</strong></p>
     `;
 
-    setHTML("resultado", html);
-
-    drawTotalGoalsChart(matrix);
-    drawTopScoresChart(scoreProbs.slice(0, 8));
+    gerarGraficoGols(lambdaA, lambdaB);
+    gerarGraficoPlacares(matriz);
 }
 
-// ========================
-// GRÁFICO — TOTAL DE GOLS
-// ========================
-let chartTotal = null;
-let chartScores = null;
+// ===============================
+// GRÁFICO DE GOLS
+// ===============================
+function gerarGraficoGols(lambdaA, lambdaB) {
 
-function drawTotalGoalsChart(matrix) {
-    const N = matrix.length - 1;
-    const totals = Array.from({ length: N * 2 + 1 }, () => 0);
+    const labels = [];
+    const dadosA = [];
+    const dadosB = [];
 
-    for (let i = 0; i <= N; i++) {
-        for (let j = 0; j <= N; j++) {
-            totals[i + j] += matrix[i][j];
-        }
+    for (let i = 0; i <= MAX_GOALS; i++) {
+        labels.push(i);
+        dadosA.push(poisson(lambdaA, i));
+        dadosB.push(poisson(lambdaB, i));
     }
 
-    const ctx = document.getElementById("graficoGols").getContext("2d");
+    if (chartGols) chartGols.destroy();
 
-    if (chartTotal) chartTotal.destroy();
-
-    chartTotal = new Chart(ctx, {
+    chartGols = new Chart(document.getElementById("graficoGols"), {
         type: "bar",
         data: {
-            labels: totals.map((_, i) => `${i}`),
+            labels,
+            datasets: [
+                { label: "Time A", data: dadosA },
+                { label: "Time B", data: dadosB }
+            ]
+        }
+    });
+}
+
+// ===============================
+// GRÁFICO PLACARES
+// ===============================
+function gerarGraficoPlacares(matriz) {
+
+    const top = matriz
+        .sort((a, b) => b.prob - a.prob)
+        .slice(0, 6);
+
+    if (chartPlacares) chartPlacares.destroy();
+
+    chartPlacares = new Chart(document.getElementById("graficoPlacares"), {
+        type: "bar",
+        data: {
+            labels: top.map(p => `${p.i}x${p.j}`),
             datasets: [{
-                label: "Distribuição de Gols (%)",
-                data: totals.map(x => (x * 100).toFixed(2)),
-                borderWidth: 1
+                label: "Probabilidade",
+                data: top.map(p => p.prob)
             }]
         }
     });
 }
 
-// ========================
-// GRÁFICO — TOP PLACARES
-// ========================
-function drawTopScoresChart(list) {
-    const ctx = document.getElementById("graficoPlacares").getContext("2d");
-
-    if (chartScores) chartScores.destroy();
-
-    chartScores = new Chart(ctx, {
-        type: "bar",
-        data: {
-            labels: list.map(s => s.score),
-            datasets: [{
-                label: "Probabilidade (%)",
-                data: list.map(s => (s.prob * 100).toFixed(2)),
-                borderWidth: 1
-            }]
-        }
-    });
-}
-
-// ========================
+// ===============================
 // EXEMPLO
-// ========================
+// ===============================
 function preencherExemplo() {
-
-    const aGols = [2, 1, 3, 1, 2];
-    const aSof = [1, 0, 1, 2, 1];
-    const bGols = [1, 0, 2, 1, 1];
-    const bSof = [2, 1, 0, 1, 1];
-
-    document.querySelectorAll(".golsA").forEach((el, i) => el.value = aGols[i]);
-    document.querySelectorAll(".golsSofridosA").forEach((el, i) => el.value = aSof[i]);
-    document.querySelectorAll(".golsB").forEach((el, i) => el.value = bGols[i]);
-    document.querySelectorAll(".golsSofridosB").forEach((el, i) => el.value = bSof[i]);
-
-    // H2H exemplo
-    const h2ha = [1, 2, 0, 1, 1];
-    const h2hb = [0, 1, 2, 1, 1];
-
-    document.querySelectorAll(".h2hA").forEach((el, i) => el.value = h2ha[i]);
-    document.querySelectorAll(".h2hB").forEach((el, i) => el.value = h2hb[i]);
+    document.querySelectorAll("input[type='number']").forEach(i => i.value = 1);
 }
 
-// ========================
+// ===============================
 // LIMPAR
-// ========================
+// ===============================
 function limpar() {
-    document.querySelectorAll("input[type='number']").forEach(i => i.value = 0);
-    setHTML("resultado", "");
-
-    if (chartTotal) {
-        chartTotal.destroy();
-        chartTotal = null;
-    }
-
-    if (chartScores) {
-        chartScores.destroy();
-        chartScores = null;
-    }
+    document.querySelectorAll("input").forEach(i => {
+        if (i.type === "number") i.value = "";
+    });
+    document.getElementById("resultado").innerHTML = "";
 }
+
 
 
 
