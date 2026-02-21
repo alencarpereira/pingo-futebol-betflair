@@ -1,7 +1,6 @@
 // ===============================
 // CONFIG
 // ===============================
-const MAX_GOALS = 6;
 let chartGols = null;
 let chartPlacares = null;
 
@@ -31,6 +30,14 @@ function factorial(n) {
 }
 
 // ===============================
+// LIMITE DINÂMICO DE GOLS
+// ===============================
+function calcularMaxGoals(lambdaA, lambdaB) {
+    const mediaTotal = lambdaA + lambdaB;
+    return Math.max(8, Math.ceil(mediaTotal + 6));
+}
+
+// ===============================
 // FAVORITISMO
 // ===============================
 function atualizarFavoritismo() {
@@ -47,7 +54,6 @@ function atualizarFavoritismo() {
 // ===============================
 function calcular() {
 
-    // ===== MÉDIAS =====
     const golsA = mean(getValues(".golsA"));
     const sofridosA = mean(getValues(".golsSofridosA"));
     const golsB = mean(getValues(".golsB"));
@@ -59,17 +65,16 @@ function calcular() {
     const favA = parseFloat(document.getElementById("favA").value) / 100;
     const favB = 1 - favA;
 
-    // ===== LAMBDA AJUSTADO =====
     let lambdaA = ((golsA + sofridosB) / 2) * (0.7 + favA * 0.6);
     let lambdaB = ((golsB + sofridosA) / 2) * (0.7 + favB * 0.6);
 
-    // Peso confronto direto
     if (h2hA > 0 || h2hB > 0) {
         lambdaA = (lambdaA * 0.8) + (h2hA * 0.2);
         lambdaB = (lambdaB * 0.8) + (h2hB * 0.2);
     }
 
-    // ===== MATRIZ DE PROBABILIDADES =====
+    const maxGoals = calcularMaxGoals(lambdaA, lambdaB);
+
     let matriz = [];
     let probOver25 = 0;
     let probBTTS = 0;
@@ -79,8 +84,8 @@ function calcular() {
 
     let melhorPlacar = { prob: 0, placar: "0x0" };
 
-    for (let i = 0; i <= MAX_GOALS; i++) {
-        for (let j = 0; j <= MAX_GOALS; j++) {
+    for (let i = 0; i <= maxGoals; i++) {
+        for (let j = 0; j <= maxGoals; j++) {
 
             const pA = poisson(lambdaA, i);
             const pB = poisson(lambdaB, j);
@@ -104,16 +109,11 @@ function calcular() {
         }
     }
 
-    // ===============================
-    // INTERPRETAÇÃO
-    // ===============================
+    const mediaTotal = lambdaA + lambdaB;
 
     let interpretacao = "";
     let sugestao = "";
 
-    const mediaTotal = lambdaA + lambdaB;
-
-    // Tendência ofensiva
     if (mediaTotal > 2.6 || probOver25 > 0.6) {
         interpretacao += "Jogo com tendência ofensiva. ";
     } else if (mediaTotal < 2.2) {
@@ -122,7 +122,6 @@ function calcular() {
         interpretacao += "Partida com cenário moderado de gols. ";
     }
 
-    // Superioridade
     if (lambdaA > lambdaB + 0.4) {
         interpretacao += "Time A apresenta superioridade estatística. ";
     } else if (lambdaB > lambdaA + 0.4) {
@@ -131,7 +130,6 @@ function calcular() {
         interpretacao += "Confronto equilibrado sem favorito claro. ";
     }
 
-    // BTTS
     if (probBTTS > 0.55) {
         interpretacao += "Alta probabilidade de ambas equipes marcarem. ";
     } else if (probBTTS < 0.45) {
@@ -140,7 +138,6 @@ function calcular() {
 
     interpretacao += `Expectativa média de ${mediaTotal.toFixed(2)} gols.`;
 
-    // ===== MERCADO MAIS FORTE =====
     const mercados = [
         { nome: "Over 2.5 gols", valor: probOver25 },
         { nome: "Under 2.5 gols", valor: 1 - probOver25 },
@@ -153,9 +150,6 @@ function calcular() {
     mercados.sort((a, b) => b.valor - a.valor);
     sugestao = mercados[0].nome;
 
-    // ===============================
-    // SAÍDA
-    // ===============================
     document.getElementById("resultado").innerHTML = `
         <h3>📊 Análise Estatística</h3>
         <p><strong>Placar mais provável:</strong> ${melhorPlacar.placar}</p>
@@ -171,20 +165,20 @@ function calcular() {
         <p>Mercado com melhor projeção: <strong>${sugestao}</strong></p>
     `;
 
-    gerarGraficoGols(lambdaA, lambdaB);
+    gerarGraficoGols(lambdaA, lambdaB, maxGoals);
     gerarGraficoPlacares(matriz);
 }
 
 // ===============================
 // GRÁFICO DE GOLS
 // ===============================
-function gerarGraficoGols(lambdaA, lambdaB) {
+function gerarGraficoGols(lambdaA, lambdaB, maxGoals) {
 
     const labels = [];
     const dadosA = [];
     const dadosB = [];
 
-    for (let i = 0; i <= MAX_GOALS; i++) {
+    for (let i = 0; i <= maxGoals; i++) {
         labels.push(i);
         dadosA.push(poisson(lambdaA, i));
         dadosB.push(poisson(lambdaB, i));
@@ -225,23 +219,6 @@ function gerarGraficoPlacares(matriz) {
             }]
         }
     });
-}
-
-// ===============================
-// EXEMPLO
-// ===============================
-function preencherExemplo() {
-    document.querySelectorAll("input[type='number']").forEach(i => i.value = 1);
-}
-
-// ===============================
-// LIMPAR
-// ===============================
-function limpar() {
-    document.querySelectorAll("input").forEach(i => {
-        if (i.type === "number") i.value = "";
-    });
-    document.getElementById("resultado").innerHTML = "";
 }
 
 
