@@ -41,7 +41,7 @@ function calcularMaxGoals(lambdaA, lambdaB) {
 // FAVORITISMO
 // ===============================
 function atualizarFavoritismo() {
-    const favA = document.getElementById("favA").value;
+    const favA = parseFloat(document.getElementById("favA").value);
     const favB = 100 - favA;
 
     document.getElementById("favB").value = favB;
@@ -54,6 +54,7 @@ function atualizarFavoritismo() {
 // ===============================
 function calcular() {
 
+    // ===== MÉDIAS =====
     const golsA = mean(getValues(".golsA"));
     const sofridosA = mean(getValues(".golsSofridosA"));
     const golsB = mean(getValues(".golsB"));
@@ -65,9 +66,11 @@ function calcular() {
     const favA = parseFloat(document.getElementById("favA").value) / 100;
     const favB = 1 - favA;
 
+    // ===== LAMBDA AJUSTADO =====
     let lambdaA = ((golsA + sofridosB) / 2) * (0.7 + favA * 0.6);
     let lambdaB = ((golsB + sofridosA) / 2) * (0.7 + favB * 0.6);
 
+    // Peso confronto direto
     if (h2hA > 0 || h2hB > 0) {
         lambdaA = (lambdaA * 0.8) + (h2hA * 0.2);
         lambdaB = (lambdaB * 0.8) + (h2hB * 0.2);
@@ -75,7 +78,25 @@ function calcular() {
 
     const maxGoals = calcularMaxGoals(lambdaA, lambdaB);
 
+    // ===== MATRIZ =====
     let matriz = [];
+    let somaTotal = 0;
+
+    for (let i = 0; i <= maxGoals; i++) {
+        for (let j = 0; j <= maxGoals; j++) {
+            const prob = poisson(lambdaA, i) * poisson(lambdaB, j);
+            matriz.push({ i, j, prob });
+            somaTotal += prob;
+        }
+    }
+
+    // ===== NORMALIZAÇÃO (corrige perda de cauda) =====
+    matriz = matriz.map(p => ({
+        ...p,
+        prob: p.prob / somaTotal
+    }));
+
+    // ===== MERCADOS =====
     let probOver25 = 0;
     let probBTTS = 0;
     let probA = 0;
@@ -84,35 +105,27 @@ function calcular() {
 
     let melhorPlacar = { prob: 0, placar: "0x0" };
 
-    for (let i = 0; i <= maxGoals; i++) {
-        for (let j = 0; j <= maxGoals; j++) {
+    matriz.forEach(p => {
 
-            const pA = poisson(lambdaA, i);
-            const pB = poisson(lambdaB, j);
-            const prob = pA * pB;
+        if (p.i + p.j > 2.5) probOver25 += p.prob;
+        if (p.i > 0 && p.j > 0) probBTTS += p.prob;
 
-            matriz.push({ i, j, prob });
+        if (p.i > p.j) probA += p.prob;
+        if (p.i === p.j) probEmpate += p.prob;
+        if (p.j > p.i) probB += p.prob;
 
-            if (i + j > 2.5) probOver25 += prob;
-            if (i > 0 && j > 0) probBTTS += prob;
-
-            if (i > j) probA += prob;
-            if (i === j) probEmpate += prob;
-            if (j > i) probB += prob;
-
-            if (prob > melhorPlacar.prob) {
-                melhorPlacar = {
-                    prob,
-                    placar: `${i}x${j}`
-                };
-            }
+        if (p.prob > melhorPlacar.prob) {
+            melhorPlacar = {
+                prob: p.prob,
+                placar: `${p.i}x${p.j}`
+            };
         }
-    }
+    });
 
     const mediaTotal = lambdaA + lambdaB;
 
+    // ===== INTERPRETAÇÃO =====
     let interpretacao = "";
-    let sugestao = "";
 
     if (mediaTotal > 2.6 || probOver25 > 0.6) {
         interpretacao += "Jogo com tendência ofensiva. ";
@@ -148,8 +161,9 @@ function calcular() {
     ];
 
     mercados.sort((a, b) => b.valor - a.valor);
-    sugestao = mercados[0].nome;
+    const sugestao = mercados[0].nome;
 
+    // ===== SAÍDA =====
     document.getElementById("resultado").innerHTML = `
         <h3>📊 Análise Estatística</h3>
         <p><strong>Placar mais provável:</strong> ${melhorPlacar.placar}</p>
@@ -162,7 +176,7 @@ function calcular() {
         <h4>🧠 Interpretação:</h4>
         <p>${interpretacao}</p>
         <h4>🎯 Sugestão estatística:</h4>
-        <p>Mercado com melhor projeção: <strong>${sugestao}</strong></p>
+        <p><strong>${sugestao}</strong></p>
     `;
 
     gerarGraficoGols(lambdaA, lambdaB, maxGoals);
@@ -203,7 +217,7 @@ function gerarGraficoGols(lambdaA, lambdaB, maxGoals) {
 // ===============================
 function gerarGraficoPlacares(matriz) {
 
-    const top = matriz
+    const top = [...matriz]
         .sort((a, b) => b.prob - a.prob)
         .slice(0, 6);
 
@@ -220,6 +234,41 @@ function gerarGraficoPlacares(matriz) {
         }
     });
 }
+
+// ===============================
+// EXEMPLO
+// ===============================
+function preencherExemplo() {
+    document.querySelectorAll("input[type='number']").forEach(i => {
+        if (!i.disabled) {
+            i.value = Math.floor(Math.random() * 3);
+        }
+    });
+    atualizarFavoritismo();
+}
+
+// ===============================
+// LIMPAR
+// ===============================
+function limpar() {
+    document.querySelectorAll("input").forEach(i => {
+        if (i.type === "number" && !i.disabled) {
+            i.value = "";
+        }
+    });
+
+    document.getElementById("resultado").innerHTML = "";
+
+    if (chartGols) chartGols.destroy();
+    if (chartPlacares) chartPlacares.destroy();
+}
+
+// ===============================
+// INICIALIZAÇÃO
+// ===============================
+window.onload = function () {
+    atualizarFavoritismo();
+};
 
 
 
