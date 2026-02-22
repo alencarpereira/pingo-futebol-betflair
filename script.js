@@ -3,7 +3,7 @@
 // ===============================
 let chartGols = null;
 let chartPlacares = null;
-const CORTE_MINIMO = 0.58; // 58%
+const CORTE_MINIMO = 0.55;
 
 // ===============================
 // HELPERS
@@ -31,7 +31,7 @@ function poisson(lambda, k) {
 }
 
 // ===============================
-// LIMITE DINÂMICO DE GOLS
+// LIMITE DINÂMICO
 // ===============================
 function calcularMaxGoals(lambdaA, lambdaB) {
     const mediaTotal = lambdaA + lambdaB;
@@ -87,7 +87,6 @@ function calcular() {
         }
     }
 
-    // Normalizar
     matriz = matriz.map(p => ({
         ...p,
         prob: p.prob / somaTotal
@@ -118,6 +117,26 @@ function calcular() {
         }
     });
 
+    const mediaTotal = lambdaA + lambdaB;
+
+    let interpretacao = "";
+
+    if (mediaTotal > 2.8) {
+        interpretacao += "Forte tendência ofensiva. ";
+    } else if (mediaTotal < 2.2) {
+        interpretacao += "Jogo com tendência de poucos gols. ";
+    } else {
+        interpretacao += "Cenário equilibrado de gols. ";
+    }
+
+    if (Math.abs(lambdaA - lambdaB) > 0.5) {
+        interpretacao += "Existe superioridade estatística clara. ";
+    } else {
+        interpretacao += "Confronto equilibrado. ";
+    }
+
+    interpretacao += `Expectativa média: ${mediaTotal.toFixed(2)} gols.`;
+
     const mercados = [
         { nome: "Over 2.5 gols", valor: probOver25 },
         { nome: "Under 2.5 gols", valor: 1 - probOver25 },
@@ -142,7 +161,7 @@ function calcular() {
     } else {
         sugestaoTexto = `
             <p style="color:red;">
-            ⚠️ Nenhum mercado forte o suficiente.
+            ⚠️ Nenhum mercado atingiu o corte mínimo de ${(CORTE_MINIMO * 100)}%.
             Melhor probabilidade: ${(melhorMercado.valor * 100).toFixed(1)}%
             </p>
         `;
@@ -157,6 +176,9 @@ function calcular() {
         <p><strong>Empate:</strong> ${(probEmpate * 100).toFixed(1)}%</p>
         <p><strong>Vitória B:</strong> ${(probB * 100).toFixed(1)}%</p>
         <hr>
+        <h4>🧠 Interpretação:</h4>
+        <p>${interpretacao}</p>
+        <hr>
         ${sugestaoTexto}
     `;
 
@@ -165,7 +187,7 @@ function calcular() {
 }
 
 // ===============================
-// GRÁFICO DE GOLS
+// GRÁFICOS
 // ===============================
 function gerarGraficoGols(lambdaA, lambdaB, maxGoals) {
 
@@ -184,24 +206,15 @@ function gerarGraficoGols(lambdaA, lambdaB, maxGoals) {
     chartGols = new Chart(document.getElementById("graficoGols"), {
         type: "bar",
         data: {
-            labels: labels,
+            labels,
             datasets: [
-                {
-                    label: "Time A",
-                    data: dataA
-                },
-                {
-                    label: "Time B",
-                    data: dataB
-                }
+                { label: "Time A", data: dataA },
+                { label: "Time B", data: dataB }
             ]
         }
     });
 }
 
-// ===============================
-// GRÁFICO TOP PLACARES
-// ===============================
 function gerarGraficoPlacares(matriz) {
 
     const top = [...matriz]
@@ -232,7 +245,9 @@ function preencherExemplo() {
 
     const setValues = (selector, values) => {
         const inputs = document.querySelectorAll(selector);
-        values.forEach((v, i) => inputs[i].value = v);
+        values.forEach((v, i) => {
+            if (inputs[i]) inputs[i].value = v;
+        });
     };
 
     setValues(".golsA", [2, 1, 3, 2, 1]);
@@ -260,6 +275,9 @@ function limpar() {
     if (chartGols) chartGols.destroy();
     if (chartPlacares) chartPlacares.destroy();
 }
+
+// Inicializar favoritismo ao carregar
+window.onload = atualizarFavoritismo;
 
 
 
