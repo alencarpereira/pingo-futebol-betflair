@@ -3,6 +3,7 @@
 // ===============================
 let chartGols = null;
 let chartPlacares = null;
+const CORTE_MINIMO = 0.58; // 58%
 
 // ===============================
 // HELPERS
@@ -18,15 +19,15 @@ function getValues(selector) {
         .map(i => parseFloat(i.value) || 0);
 }
 
-function poisson(lambda, k) {
-    return (Math.pow(lambda, k) * Math.exp(-lambda)) / factorial(k);
-}
-
 function factorial(n) {
     if (n <= 1) return 1;
     let f = 1;
     for (let i = 2; i <= n; i++) f *= i;
     return f;
+}
+
+function poisson(lambda, k) {
+    return (Math.pow(lambda, k) * Math.exp(-lambda)) / factorial(k);
 }
 
 // ===============================
@@ -54,7 +55,6 @@ function atualizarFavoritismo() {
 // ===============================
 function calcular() {
 
-    // ===== MÉDIAS =====
     const golsA = mean(getValues(".golsA"));
     const sofridosA = mean(getValues(".golsSofridosA"));
     const golsB = mean(getValues(".golsB"));
@@ -66,11 +66,9 @@ function calcular() {
     const favA = parseFloat(document.getElementById("favA").value) / 100;
     const favB = 1 - favA;
 
-    // ===== LAMBDA AJUSTADO =====
     let lambdaA = ((golsA + sofridosB) / 2) * (0.7 + favA * 0.6);
     let lambdaB = ((golsB + sofridosA) / 2) * (0.7 + favB * 0.6);
 
-    // Peso confronto direto
     if (h2hA > 0 || h2hB > 0) {
         lambdaA = (lambdaA * 0.8) + (h2hA * 0.2);
         lambdaB = (lambdaB * 0.8) + (h2hB * 0.2);
@@ -78,7 +76,6 @@ function calcular() {
 
     const maxGoals = calcularMaxGoals(lambdaA, lambdaB);
 
-    // ===== MATRIZ =====
     let matriz = [];
     let somaTotal = 0;
 
@@ -90,13 +87,12 @@ function calcular() {
         }
     }
 
-    // ===== NORMALIZAÇÃO (corrige perda de cauda) =====
+    // Normalizar
     matriz = matriz.map(p => ({
         ...p,
         prob: p.prob / somaTotal
     }));
 
-    // ===== MERCADOS =====
     let probOver25 = 0;
     let probBTTS = 0;
     let probA = 0;
@@ -122,35 +118,6 @@ function calcular() {
         }
     });
 
-    const mediaTotal = lambdaA + lambdaB;
-
-    // ===== INTERPRETAÇÃO =====
-    let interpretacao = "";
-
-    if (mediaTotal > 2.6 || probOver25 > 0.6) {
-        interpretacao += "Jogo com tendência ofensiva. ";
-    } else if (mediaTotal < 2.2) {
-        interpretacao += "Jogo com tendência mais equilibrada e poucos gols. ";
-    } else {
-        interpretacao += "Partida com cenário moderado de gols. ";
-    }
-
-    if (lambdaA > lambdaB + 0.4) {
-        interpretacao += "Time A apresenta superioridade estatística. ";
-    } else if (lambdaB > lambdaA + 0.4) {
-        interpretacao += "Time B apresenta superioridade estatística. ";
-    } else {
-        interpretacao += "Confronto equilibrado sem favorito claro. ";
-    }
-
-    if (probBTTS > 0.55) {
-        interpretacao += "Alta probabilidade de ambas equipes marcarem. ";
-    } else if (probBTTS < 0.45) {
-        interpretacao += "Baixa probabilidade de ambas marcarem. ";
-    }
-
-    interpretacao += `Expectativa média de ${mediaTotal.toFixed(2)} gols.`;
-
     const mercados = [
         { nome: "Over 2.5 gols", valor: probOver25 },
         { nome: "Under 2.5 gols", valor: 1 - probOver25 },
@@ -161,9 +128,26 @@ function calcular() {
     ];
 
     mercados.sort((a, b) => b.valor - a.valor);
-    const sugestao = mercados[0].nome;
+    const melhorMercado = mercados[0];
 
-    // ===== SAÍDA =====
+    let sugestaoTexto = "";
+
+    if (melhorMercado.valor >= CORTE_MINIMO) {
+        sugestaoTexto = `
+            <p style="color:green;">
+            ✅ Aposta recomendada: <strong>${melhorMercado.nome}</strong>
+            (${(melhorMercado.valor * 100).toFixed(1)}%)
+            </p>
+        `;
+    } else {
+        sugestaoTexto = `
+            <p style="color:red;">
+            ⚠️ Nenhum mercado forte o suficiente.
+            Melhor probabilidade: ${(melhorMercado.valor * 100).toFixed(1)}%
+            </p>
+        `;
+    }
+
     document.getElementById("resultado").innerHTML = `
         <h3>📊 Análise Estatística</h3>
         <p><strong>Placar mais provável:</strong> ${melhorPlacar.placar}</p>
@@ -173,10 +157,7 @@ function calcular() {
         <p><strong>Empate:</strong> ${(probEmpate * 100).toFixed(1)}%</p>
         <p><strong>Vitória B:</strong> ${(probB * 100).toFixed(1)}%</p>
         <hr>
-        <h4>🧠 Interpretação:</h4>
-        <p>${interpretacao}</p>
-        <h4>🎯 Sugestão estatística:</h4>
-        <p><strong>${sugestao}</strong></p>
+        ${sugestaoTexto}
     `;
 
     gerarGraficoGols(lambdaA, lambdaB, maxGoals);
@@ -189,13 +170,13 @@ function calcular() {
 function gerarGraficoGols(lambdaA, lambdaB, maxGoals) {
 
     const labels = [];
-    const dadosA = [];
-    const dadosB = [];
+    const dataA = [];
+    const dataB = [];
 
     for (let i = 0; i <= maxGoals; i++) {
         labels.push(i);
-        dadosA.push(poisson(lambdaA, i));
-        dadosB.push(poisson(lambdaB, i));
+        dataA.push(poisson(lambdaA, i));
+        dataB.push(poisson(lambdaB, i));
     }
 
     if (chartGols) chartGols.destroy();
@@ -203,23 +184,29 @@ function gerarGraficoGols(lambdaA, lambdaB, maxGoals) {
     chartGols = new Chart(document.getElementById("graficoGols"), {
         type: "bar",
         data: {
-            labels,
+            labels: labels,
             datasets: [
-                { label: "Time A", data: dadosA },
-                { label: "Time B", data: dadosB }
+                {
+                    label: "Time A",
+                    data: dataA
+                },
+                {
+                    label: "Time B",
+                    data: dataB
+                }
             ]
         }
     });
 }
 
 // ===============================
-// GRÁFICO PLACARES
+// GRÁFICO TOP PLACARES
 // ===============================
 function gerarGraficoPlacares(matriz) {
 
     const top = [...matriz]
         .sort((a, b) => b.prob - a.prob)
-        .slice(0, 6);
+        .slice(0, 10);
 
     if (chartPlacares) chartPlacares.destroy();
 
@@ -236,26 +223,37 @@ function gerarGraficoPlacares(matriz) {
 }
 
 // ===============================
-// EXEMPLO
+// PREENCHER EXEMPLO
 // ===============================
 function preencherExemplo() {
-    document.querySelectorAll("input[type='number']").forEach(i => {
-        if (!i.disabled) {
-            i.value = Math.floor(Math.random() * 3);
-        }
-    });
+
+    document.getElementById("favA").value = 60;
     atualizarFavoritismo();
+
+    const setValues = (selector, values) => {
+        const inputs = document.querySelectorAll(selector);
+        values.forEach((v, i) => inputs[i].value = v);
+    };
+
+    setValues(".golsA", [2, 1, 3, 2, 1]);
+    setValues(".golsSofridosA", [1, 0, 1, 2, 1]);
+    setValues(".golsB", [1, 0, 2, 1, 1]);
+    setValues(".golsSofridosB", [2, 1, 2, 1, 3]);
+    setValues(".h2hA", [1, 2, 0, 1, 2]);
+    setValues(".h2hB", [1, 1, 1, 0, 1]);
 }
 
 // ===============================
 // LIMPAR
 // ===============================
 function limpar() {
-    document.querySelectorAll("input").forEach(i => {
-        if (i.type === "number" && !i.disabled) {
-            i.value = "";
-        }
+
+    document.querySelectorAll("input[type='number']").forEach(input => {
+        input.value = "";
     });
+
+    document.getElementById("favA").value = 50;
+    atualizarFavoritismo();
 
     document.getElementById("resultado").innerHTML = "";
 
@@ -263,12 +261,6 @@ function limpar() {
     if (chartPlacares) chartPlacares.destroy();
 }
 
-// ===============================
-// INICIALIZAÇÃO
-// ===============================
-window.onload = function () {
-    atualizarFavoritismo();
-};
 
 
 
