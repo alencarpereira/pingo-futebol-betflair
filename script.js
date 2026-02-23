@@ -36,10 +36,31 @@ function calcularMaxGoals(lambdaA, lambdaB) {
 }
 
 // ===============================
+// AUTO AJUSTE PELO MERCADO
+// ===============================
+function ajustarFavoritismoPeloMercado() {
+
+    const mercadoCasa = parseFloat(document.getElementById("mercadoCasa").value);
+    const mercadoVisitante = parseFloat(document.getElementById("mercadoVisitante").value);
+
+    if (!isNaN(mercadoCasa) && !isNaN(mercadoVisitante)) {
+
+        const total = mercadoCasa + mercadoVisitante;
+
+        if (total > 0) {
+            const novaFav = (mercadoCasa / total) * 100;
+
+            document.getElementById("favA").value = novaFav.toFixed(0);
+            atualizarFavoritismo();
+        }
+    }
+}
+
+// ===============================
 // FAVORITISMO
 // ===============================
 function atualizarFavoritismo() {
-    const favA = parseFloat(document.getElementById("favA").value);
+    const favA = parseFloat(document.getElementById("favA").value) || 50;
     const favB = 100 - favA;
 
     document.getElementById("favB").value = favB;
@@ -52,6 +73,9 @@ function atualizarFavoritismo() {
 // ===============================
 function calcular() {
 
+    // 🔥 ajuste automático antes de calcular
+    ajustarFavoritismoPeloMercado();
+
     const golsA = mean(getValues(".golsA"));
     const sofridosA = mean(getValues(".golsSofridosA"));
     const golsB = mean(getValues(".golsB"));
@@ -59,7 +83,7 @@ function calcular() {
     const h2hA = mean(getValues(".h2hA"));
     const h2hB = mean(getValues(".h2hB"));
 
-    const favA = parseFloat(document.getElementById("favA").value) / 100;
+    const favA = (parseFloat(document.getElementById("favA").value) || 50) / 100;
     const favB = 1 - favA;
 
     let lambdaA = ((golsA + sofridosB) / 2) * (0.7 + favA * 0.6);
@@ -111,85 +135,49 @@ function calcular() {
     // INTERPRETAÇÃO
     // ===============================
     const mediaTotal = lambdaA + lambdaB;
-    let interpretacao = "";
 
-    if (mediaTotal > 2.8) interpretacao += "Forte tendência ofensiva. ";
-    else if (mediaTotal < 2.2) interpretacao += "Jogo com tendência de poucos gols. ";
-    else interpretacao += "Cenário equilibrado de gols. ";
+    let interpretacao =
+        `Expectativa média: ${mediaTotal.toFixed(2)} gols. `;
 
-    if (Math.abs(lambdaA - lambdaB) > 0.5)
-        interpretacao += "Existe superioridade estatística clara. ";
+    if (mediaTotal > 2.8)
+        interpretacao += "Tendência ofensiva forte. ";
+    else if (mediaTotal < 2.2)
+        interpretacao += "Tendência under. ";
     else
-        interpretacao += "Confronto equilibrado. ";
-
-    interpretacao += `Expectativa média: ${mediaTotal.toFixed(2)} gols.`;
+        interpretacao += "Equilíbrio de gols. ";
 
     // ===============================
-    // SUGESTÃO
+    // VALIDAÇÃO
     // ===============================
-    const mercados = [
-        { nome: "Over 2.5 gols", valor: probOver25 },
-        { nome: "BTTS - Sim", valor: probBTTS },
-        { nome: "Vitória Time A", valor: probA },
-        { nome: "Empate", valor: probEmpate },
-        { nome: "Vitória Time B", valor: probB }
-    ];
-
-    mercados.sort((a, b) => b.valor - a.valor);
-    const melhorMercado = mercados[0];
-
-    let sugestaoTexto = "";
-
-    if (melhorMercado.valor >= CORTE_MINIMO) {
-        sugestaoTexto = `
-        <p style="color:green;">
-        ✅ Aposta recomendada: <strong>${melhorMercado.nome}</strong>
-        (${(melhorMercado.valor * 100).toFixed(1)}%)
-        </p>`;
-    } else {
-        sugestaoTexto = `
-        <p style="color:red;">
-        ⚠️ Nenhum mercado atingiu o corte mínimo.
-        Melhor probabilidade: ${(melhorMercado.valor * 100).toFixed(1)}%
-        </p>`;
-    }
-
-    // ===============================
-    // VALIDAÇÃO + STATUS FINAL
-    // ===============================
-    const mercadoA = parseFloat(document.getElementById("mercadoA").value);
+    const mercadoCasa = parseFloat(document.getElementById("mercadoCasa").value);
+    const mercadoVisitante = parseFloat(document.getElementById("mercadoVisitante").value);
     const mercadoOver = parseFloat(document.getElementById("mercadoOver").value);
     const mercadoBTTS = parseFloat(document.getElementById("mercadoBTTS").value);
 
-    let alinhamentos = [];
-
-    function classificar(diff) {
-        if (diff <= 0.06) return "verde";
-        if (diff <= 0.12) return "amarelo";
-        return "vermelho";
+    function diff(modelo, mercado) {
+        return Math.abs(modelo - (mercado / 100));
     }
 
-    function avaliar(modelo, mercado) {
-        const diff = Math.abs(modelo - (mercado / 100));
-        return classificar(diff);
-    }
+    let status = "⚪ Sem dados de mercado";
+    let cor = "gray";
 
-    if (!isNaN(mercadoA)) alinhamentos.push(avaliar(probA, mercadoA));
-    if (!isNaN(mercadoOver)) alinhamentos.push(avaliar(probOver25, mercadoOver));
-    if (!isNaN(mercadoBTTS)) alinhamentos.push(avaliar(probBTTS, mercadoBTTS));
+    if (!isNaN(mercadoCasa)) {
 
-    let statusFinal = "";
-    let corStatus = "gray";
+        const d1 = diff(probA, mercadoCasa);
+        const d2 = !isNaN(mercadoVisitante) ? diff(probB, mercadoVisitante) : 0;
 
-    if (alinhamentos.includes("vermelho")) {
-        statusFinal = "🔴 EVITAR — Mercado divergente do modelo.";
-        corStatus = "red";
-    } else if (alinhamentos.includes("amarelo")) {
-        statusFinal = "🟡 CUIDADO — Parcialmente alinhado.";
-        corStatus = "orange";
-    } else if (alinhamentos.length > 0) {
-        statusFinal = "🟢 VALIDADO — Forte alinhamento com mercado.";
-        corStatus = "green";
+        if (d1 < 0.06 && d2 < 0.06) {
+            status = "🟢 Modelo alinhado com mercado";
+            cor = "green";
+        }
+        else if (d1 < 0.12) {
+            status = "🟡 Parcialmente alinhado";
+            cor = "orange";
+        }
+        else {
+            status = "🔴 Divergente do mercado";
+            cor = "red";
+        }
     }
 
     // ===============================
@@ -200,20 +188,20 @@ function calcular() {
         <p><strong>Placar mais provável:</strong> ${melhorPlacar.placar}</p>
         <p><strong>Over 2.5:</strong> ${(probOver25 * 100).toFixed(1)}%</p>
         <p><strong>BTTS:</strong> ${(probBTTS * 100).toFixed(1)}%</p>
-        <p><strong>Vitória A:</strong> ${(probA * 100).toFixed(1)}%</p>
+        <p><strong>Vitória Casa:</strong> ${(probA * 100).toFixed(1)}%</p>
         <p><strong>Empate:</strong> ${(probEmpate * 100).toFixed(1)}%</p>
-        <p><strong>Vitória B:</strong> ${(probB * 100).toFixed(1)}%</p>
+        <p><strong>Vitória Visitante:</strong> ${(probB * 100).toFixed(1)}%</p>
         <hr>
-        <h4>🧠 Interpretação:</h4>
         <p>${interpretacao}</p>
         <hr>
-        ${sugestaoTexto}
-        <hr>
-        <h3 style="color:${corStatus};">${statusFinal}</h3>
+        <h3 style="color:${cor};">${status}</h3>
     `;
 
-    gerarGraficoGols(lambdaA, lambdaB, maxGoals);
-    gerarGraficoPlacares(matriz);
+    if (typeof gerarGraficoGols === "function")
+        gerarGraficoGols(lambdaA, lambdaB, maxGoals);
+
+    if (typeof gerarGraficoPlacares === "function")
+        gerarGraficoPlacares(matriz);
 }
 
 // ===============================
@@ -224,37 +212,63 @@ function preencherExemplo() {
     document.getElementById("favA").value = 60;
     atualizarFavoritismo();
 
-    const preencher = (classe, valores) => {
-        const inputs = document.querySelectorAll(classe);
-        valores.forEach((v, i) => {
-            if (inputs[i]) inputs[i].value = v;
-        });
-    };
+    // Time A
+    const golsA = [2, 1, 3, 2, 1];
+    const sofridosA = [1, 0, 1, 2, 1];
 
-    preencher(".golsA", [2, 1, 3, 2, 1]);
-    preencher(".golsSofridosA", [1, 0, 1, 2, 1]);
-    preencher(".golsB", [1, 0, 2, 1, 1]);
-    preencher(".golsSofridosB", [2, 1, 2, 1, 3]);
-    preencher(".h2hA", [1, 2, 0, 1, 2]);
-    preencher(".h2hB", [1, 1, 1, 0, 1]);
+    document.querySelectorAll(".golsA").forEach((el, i) => el.value = golsA[i]);
+    document.querySelectorAll(".golsSofridosA").forEach((el, i) => el.value = sofridosA[i]);
 
-    document.getElementById("mercadoA").value = 58;
-    document.getElementById("mercadoOver").value = 62;
-    document.getElementById("mercadoBTTS").value = 55;
+    // Time B
+    const golsB = [1, 0, 2, 1, 1];
+    const sofridosB = [2, 1, 2, 1, 3];
+
+    document.querySelectorAll(".golsB").forEach((el, i) => el.value = golsB[i]);
+    document.querySelectorAll(".golsSofridosB").forEach((el, i) => el.value = sofridosB[i]);
+
+    // H2H
+    const h2hA = [1, 2, 0, 1, 2];
+    const h2hB = [1, 1, 1, 0, 1];
+
+    document.querySelectorAll(".h2hA").forEach((el, i) => el.value = h2hA[i]);
+    document.querySelectorAll(".h2hB").forEach((el, i) => el.value = h2hB[i]);
+
+    // Mercado exemplo
+    document.getElementById("mercadoCasa").value = 58;
+    document.getElementById("mercadoVisitante").value = 30;
+    document.getElementById("mercadoOver").value = 55;
+    document.getElementById("mercadoBTTS").value = 52;
 }
 
 // ===============================
-// LIMPAR
+// LIMPAR CAMPOS
 // ===============================
 function limpar() {
-    document.querySelectorAll("input[type='number']").forEach(i => i.value = "");
+
+    // 🔹 Zerar inputs numéricos
+    document.querySelectorAll("input[type='number']").forEach(input => {
+        if (!input.disabled) input.value = "";
+    });
+
+    // 🔹 Reset favoritismo
     document.getElementById("favA").value = 50;
     atualizarFavoritismo();
-    document.getElementById("resultado").innerHTML = "";
-    if (chartGols) chartGols.destroy();
-    if (chartPlacares) chartPlacares.destroy();
-}
 
+    // 🔹 Limpar resultado
+    document.getElementById("resultado").innerHTML = "";
+
+    // 🔹 Destruir gráficos se existirem
+    if (chartGols) {
+        chartGols.destroy();
+        chartGols = null;
+    }
+
+    if (chartPlacares) {
+        chartPlacares.destroy();
+        chartPlacares = null;
+    }
+}
+// ===============================
 window.onload = atualizarFavoritismo;
 
 
