@@ -30,9 +30,6 @@ function poisson(lambda, k) {
     return (Math.pow(lambda, k) * Math.exp(-lambda)) / factorial(k);
 }
 
-// ===============================
-// LIMITE DINÂMICO
-// ===============================
 function calcularMaxGoals(lambdaA, lambdaB) {
     const mediaTotal = lambdaA + lambdaB;
     return Math.max(8, Math.ceil(mediaTotal + 6));
@@ -59,7 +56,6 @@ function calcular() {
     const sofridosA = mean(getValues(".golsSofridosA"));
     const golsB = mean(getValues(".golsB"));
     const sofridosB = mean(getValues(".golsSofridosB"));
-
     const h2hA = mean(getValues(".h2hA"));
     const h2hB = mean(getValues(".h2hB"));
 
@@ -87,10 +83,7 @@ function calcular() {
         }
     }
 
-    matriz = matriz.map(p => ({
-        ...p,
-        prob: p.prob / somaTotal
-    }));
+    matriz = matriz.map(p => ({ ...p, prob: p.prob / somaTotal }));
 
     let probOver25 = 0;
     let probBTTS = 0;
@@ -110,36 +103,32 @@ function calcular() {
         if (p.j > p.i) probB += p.prob;
 
         if (p.prob > melhorPlacar.prob) {
-            melhorPlacar = {
-                prob: p.prob,
-                placar: `${p.i}x${p.j}`
-            };
+            melhorPlacar = { prob: p.prob, placar: `${p.i}x${p.j}` };
         }
     });
 
+    // ===============================
+    // INTERPRETAÇÃO
+    // ===============================
     const mediaTotal = lambdaA + lambdaB;
-
     let interpretacao = "";
 
-    if (mediaTotal > 2.8) {
-        interpretacao += "Forte tendência ofensiva. ";
-    } else if (mediaTotal < 2.2) {
-        interpretacao += "Jogo com tendência de poucos gols. ";
-    } else {
-        interpretacao += "Cenário equilibrado de gols. ";
-    }
+    if (mediaTotal > 2.8) interpretacao += "Forte tendência ofensiva. ";
+    else if (mediaTotal < 2.2) interpretacao += "Jogo com tendência de poucos gols. ";
+    else interpretacao += "Cenário equilibrado de gols. ";
 
-    if (Math.abs(lambdaA - lambdaB) > 0.5) {
+    if (Math.abs(lambdaA - lambdaB) > 0.5)
         interpretacao += "Existe superioridade estatística clara. ";
-    } else {
+    else
         interpretacao += "Confronto equilibrado. ";
-    }
 
     interpretacao += `Expectativa média: ${mediaTotal.toFixed(2)} gols.`;
 
+    // ===============================
+    // SUGESTÃO
+    // ===============================
     const mercados = [
         { nome: "Over 2.5 gols", valor: probOver25 },
-        { nome: "Under 2.5 gols", valor: 1 - probOver25 },
         { nome: "BTTS - Sim", valor: probBTTS },
         { nome: "Vitória Time A", valor: probA },
         { nome: "Empate", valor: probEmpate },
@@ -153,20 +142,59 @@ function calcular() {
 
     if (melhorMercado.valor >= CORTE_MINIMO) {
         sugestaoTexto = `
-            <p style="color:green;">
-            ✅ Aposta recomendada: <strong>${melhorMercado.nome}</strong>
-            (${(melhorMercado.valor * 100).toFixed(1)}%)
-            </p>
-        `;
+        <p style="color:green;">
+        ✅ Aposta recomendada: <strong>${melhorMercado.nome}</strong>
+        (${(melhorMercado.valor * 100).toFixed(1)}%)
+        </p>`;
     } else {
         sugestaoTexto = `
-            <p style="color:red;">
-            ⚠️ Nenhum mercado atingiu o corte mínimo de ${(CORTE_MINIMO * 100)}%.
-            Melhor probabilidade: ${(melhorMercado.valor * 100).toFixed(1)}%
-            </p>
-        `;
+        <p style="color:red;">
+        ⚠️ Nenhum mercado atingiu o corte mínimo.
+        Melhor probabilidade: ${(melhorMercado.valor * 100).toFixed(1)}%
+        </p>`;
     }
 
+    // ===============================
+    // VALIDAÇÃO + STATUS FINAL
+    // ===============================
+    const mercadoA = parseFloat(document.getElementById("mercadoA").value);
+    const mercadoOver = parseFloat(document.getElementById("mercadoOver").value);
+    const mercadoBTTS = parseFloat(document.getElementById("mercadoBTTS").value);
+
+    let alinhamentos = [];
+
+    function classificar(diff) {
+        if (diff <= 0.06) return "verde";
+        if (diff <= 0.12) return "amarelo";
+        return "vermelho";
+    }
+
+    function avaliar(modelo, mercado) {
+        const diff = Math.abs(modelo - (mercado / 100));
+        return classificar(diff);
+    }
+
+    if (!isNaN(mercadoA)) alinhamentos.push(avaliar(probA, mercadoA));
+    if (!isNaN(mercadoOver)) alinhamentos.push(avaliar(probOver25, mercadoOver));
+    if (!isNaN(mercadoBTTS)) alinhamentos.push(avaliar(probBTTS, mercadoBTTS));
+
+    let statusFinal = "";
+    let corStatus = "gray";
+
+    if (alinhamentos.includes("vermelho")) {
+        statusFinal = "🔴 EVITAR — Mercado divergente do modelo.";
+        corStatus = "red";
+    } else if (alinhamentos.includes("amarelo")) {
+        statusFinal = "🟡 CUIDADO — Parcialmente alinhado.";
+        corStatus = "orange";
+    } else if (alinhamentos.length > 0) {
+        statusFinal = "🟢 VALIDADO — Forte alinhamento com mercado.";
+        corStatus = "green";
+    }
+
+    // ===============================
+    // RESULTADO
+    // ===============================
     document.getElementById("resultado").innerHTML = `
         <h3>📊 Análise Estatística</h3>
         <p><strong>Placar mais provável:</strong> ${melhorPlacar.placar}</p>
@@ -180,59 +208,12 @@ function calcular() {
         <p>${interpretacao}</p>
         <hr>
         ${sugestaoTexto}
+        <hr>
+        <h3 style="color:${corStatus};">${statusFinal}</h3>
     `;
 
     gerarGraficoGols(lambdaA, lambdaB, maxGoals);
     gerarGraficoPlacares(matriz);
-}
-
-// ===============================
-// GRÁFICOS
-// ===============================
-function gerarGraficoGols(lambdaA, lambdaB, maxGoals) {
-
-    const labels = [];
-    const dataA = [];
-    const dataB = [];
-
-    for (let i = 0; i <= maxGoals; i++) {
-        labels.push(i);
-        dataA.push(poisson(lambdaA, i));
-        dataB.push(poisson(lambdaB, i));
-    }
-
-    if (chartGols) chartGols.destroy();
-
-    chartGols = new Chart(document.getElementById("graficoGols"), {
-        type: "bar",
-        data: {
-            labels,
-            datasets: [
-                { label: "Time A", data: dataA },
-                { label: "Time B", data: dataB }
-            ]
-        }
-    });
-}
-
-function gerarGraficoPlacares(matriz) {
-
-    const top = [...matriz]
-        .sort((a, b) => b.prob - a.prob)
-        .slice(0, 10);
-
-    if (chartPlacares) chartPlacares.destroy();
-
-    chartPlacares = new Chart(document.getElementById("graficoPlacares"), {
-        type: "bar",
-        data: {
-            labels: top.map(p => `${p.i}x${p.j}`),
-            datasets: [{
-                label: "Probabilidade",
-                data: top.map(p => p.prob)
-            }]
-        }
-    });
 }
 
 // ===============================
@@ -243,40 +224,37 @@ function preencherExemplo() {
     document.getElementById("favA").value = 60;
     atualizarFavoritismo();
 
-    const setValues = (selector, values) => {
-        const inputs = document.querySelectorAll(selector);
-        values.forEach((v, i) => {
+    const preencher = (classe, valores) => {
+        const inputs = document.querySelectorAll(classe);
+        valores.forEach((v, i) => {
             if (inputs[i]) inputs[i].value = v;
         });
     };
 
-    setValues(".golsA", [2, 1, 3, 2, 1]);
-    setValues(".golsSofridosA", [1, 0, 1, 2, 1]);
-    setValues(".golsB", [1, 0, 2, 1, 1]);
-    setValues(".golsSofridosB", [2, 1, 2, 1, 3]);
-    setValues(".h2hA", [1, 2, 0, 1, 2]);
-    setValues(".h2hB", [1, 1, 1, 0, 1]);
+    preencher(".golsA", [2, 1, 3, 2, 1]);
+    preencher(".golsSofridosA", [1, 0, 1, 2, 1]);
+    preencher(".golsB", [1, 0, 2, 1, 1]);
+    preencher(".golsSofridosB", [2, 1, 2, 1, 3]);
+    preencher(".h2hA", [1, 2, 0, 1, 2]);
+    preencher(".h2hB", [1, 1, 1, 0, 1]);
+
+    document.getElementById("mercadoA").value = 58;
+    document.getElementById("mercadoOver").value = 62;
+    document.getElementById("mercadoBTTS").value = 55;
 }
 
 // ===============================
 // LIMPAR
 // ===============================
 function limpar() {
-
-    document.querySelectorAll("input[type='number']").forEach(input => {
-        input.value = "";
-    });
-
+    document.querySelectorAll("input[type='number']").forEach(i => i.value = "");
     document.getElementById("favA").value = 50;
     atualizarFavoritismo();
-
     document.getElementById("resultado").innerHTML = "";
-
     if (chartGols) chartGols.destroy();
     if (chartPlacares) chartPlacares.destroy();
 }
 
-// Inicializar favoritismo ao carregar
 window.onload = atualizarFavoritismo;
 
 
