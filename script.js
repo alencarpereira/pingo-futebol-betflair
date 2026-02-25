@@ -3,7 +3,8 @@
 // ===============================
 let chartGols = null;
 let chartPlacares = null;
-const EV_MINIMO = 0.03;
+const EV_MINIMO = 0.03; // mínimo 3%
+const MAX_GOALS = 10;
 
 // ===============================
 // HELPERS
@@ -37,8 +38,8 @@ function calcularEV(prob, odd) {
 
 function classificarEV(ev) {
     if (ev > 0.08) return { texto: "🟢 VALUE FORTE", cor: "green" };
-    if (ev > 0.03) return { texto: "🟡 VALUE MODERADA", cor: "orange" };
-    if (ev > 0) return { texto: "⚪ VALUE MARGINAL", cor: "gray" };
+    if (ev > 0.05) return { texto: "🟡 VALUE BOA", cor: "orange" };
+    if (ev > 0.03) return { texto: "⚪ VALUE LEVE", cor: "gray" };
     return { texto: "🔴 SEM VALOR", cor: "red" };
 }
 
@@ -69,25 +70,23 @@ function calcular() {
     const favA = (parseFloat(document.getElementById("favA").value) || 50) / 100;
     const favB = 1 - favA;
 
-    let lambdaA = ((golsA + sofridosB) / 2) * (0.7 + favA * 0.6);
-    let lambdaB = ((golsB + sofridosA) / 2) * (0.7 + favB * 0.6);
+    let lambdaA = ((golsA + sofridosB) / 2) * (0.75 + favA * 0.5);
+    let lambdaB = ((golsB + sofridosA) / 2) * (0.75 + favB * 0.5);
 
     // Peso confronto direto
     if (h2hA > 0 || h2hB > 0) {
-        lambdaA = (lambdaA * 0.8) + (h2hA * 0.2);
-        lambdaB = (lambdaB * 0.8) + (h2hB * 0.2);
+        lambdaA = (lambdaA * 0.85) + (h2hA * 0.15);
+        lambdaB = (lambdaB * 0.85) + (h2hB * 0.15);
     }
 
-    // Ajuste mínimo realista
     lambdaA = Math.max(lambdaA, 0.2);
     lambdaB = Math.max(lambdaB, 0.2);
 
     let matriz = [];
     let somaTotal = 0;
-    const maxGoals = 10;
 
-    for (let i = 0; i <= maxGoals; i++) {
-        for (let j = 0; j <= maxGoals; j++) {
+    for (let i = 0; i <= MAX_GOALS; i++) {
+        for (let j = 0; j <= MAX_GOALS; j++) {
             const prob = poisson(lambdaA, i) * poisson(lambdaB, j);
             matriz.push({ i, j, prob });
             somaTotal += prob;
@@ -105,7 +104,7 @@ function calcular() {
 
     matriz.forEach(p => {
 
-        if (p.i + p.j > 2.5) probOver25 += p.prob;
+        if (p.i + p.j >= 3) probOver25 += p.prob;
         else probUnder25 += p.prob;
 
         if (p.i > 0 && p.j > 0) probBTTS += p.prob;
@@ -115,32 +114,40 @@ function calcular() {
         if (p.j > p.i) probB += p.prob;
     });
 
+    const expectativaGols = lambdaA + lambdaB;
+
     // ===============================
     // ODDS
     // ===============================
-    const oddCasa = parseFloat(document.getElementById("mercadoCasa").value);
-    const oddEmpate = parseFloat(document.getElementById("mercadoEmpate").value);
-    const oddVisitante = parseFloat(document.getElementById("mercadoVisitante").value);
-    const oddOver = parseFloat(document.getElementById("mercadoOver").value);
-    const oddUnder = parseFloat(document.getElementById("mercadoUnder").value);
-    const oddBTTS = parseFloat(document.getElementById("mercadoBTTS").value);
+    const mercados = [
+        { nome: "Vitória Casa", prob: probA, odd: parseFloat(document.getElementById("mercadoCasa").value) },
+        { nome: "Empate", prob: probEmpate, odd: parseFloat(document.getElementById("mercadoEmpate").value) },
+        { nome: "Vitória Visitante", prob: probB, odd: parseFloat(document.getElementById("mercadoVisitante").value) },
+        { nome: "Over 2.5", prob: probOver25, odd: parseFloat(document.getElementById("mercadoOver").value) },
+        { nome: "Under 2.5", prob: probUnder25, odd: parseFloat(document.getElementById("mercadoUnder").value) },
+        { nome: "BTTS", prob: probBTTS, odd: parseFloat(document.getElementById("mercadoBTTS").value) }
+    ];
 
     let apostas = [];
 
-    if (oddCasa) apostas.push({ nome: "Vitória Casa", prob: probA, odd: oddCasa });
-    if (oddEmpate) apostas.push({ nome: "Empate", prob: probEmpate, odd: oddEmpate });
-    if (oddVisitante) apostas.push({ nome: "Vitória Visitante", prob: probB, odd: oddVisitante });
-    if (oddOver) apostas.push({ nome: "Over 2.5", prob: probOver25, odd: oddOver });
-    if (oddUnder) apostas.push({ nome: "Under 2.5", prob: probUnder25, odd: oddUnder });
-    if (oddBTTS) apostas.push({ nome: "BTTS", prob: probBTTS, odd: oddBTTS });
+    mercados.forEach(m => {
+        if (m.odd && m.odd > 1) {
+            m.ev = calcularEV(m.prob, m.odd);
 
-    apostas.forEach(a => a.ev = calcularEV(a.prob, a.odd));
+            // FILTRO INTELIGENTE
+            if (m.nome === "Over 2.5" && expectativaGols < 2.2) return;
+            if (m.nome === "Under 2.5" && expectativaGols > 2.8) return;
+
+            apostas.push(m);
+        }
+    });
+
     apostas.sort((a, b) => b.ev - a.ev);
 
-    const melhor = apostas.length > 0 ? apostas[0] : null;
+    const melhor = apostas.length ? apostas[0] : null;
 
     // ===============================
-    // BLOCO PROBABILIDADES
+    // RESULTADO
     // ===============================
     let blocoProb = `
         <h3>📊 Probabilidades do Modelo</h3>
@@ -152,23 +159,22 @@ function calcular() {
         <p>Under 2.5: ${(probUnder25 * 100).toFixed(1)}%</p>
         <p>BTTS: ${(probBTTS * 100).toFixed(1)}%</p>
         <hr>
-        <p><strong>Expectativa de Gols:</strong> ${(lambdaA + lambdaB).toFixed(2)}</p>
+        <p><strong>Expectativa de Gols:</strong> ${expectativaGols.toFixed(2)}</p>
     `;
 
     let blocoAposta = "⚪ Nenhuma odd informada";
 
     if (melhor) {
-
         const classificacao = classificarEV(melhor.ev);
 
         if (melhor.ev < EV_MINIMO) {
             blocoAposta = `
                 <h3 style="color:red;">🔴 EVENTO SEM VALUE</h3>
-                <p>O modelo não encontrou vantagem estatística relevante.</p>
+                <p>Sem vantagem estatística relevante.</p>
             `;
         } else {
             blocoAposta = `
-                <h3 style="color:${classificacao.cor};">🎯 MELHOR APOSTA IDENTIFICADA</h3>
+                <h3 style="color:${classificacao.cor};">🎯 MELHOR APOSTA</h3>
                 <p><strong>${melhor.nome}</strong></p>
                 <p>Probabilidade Modelo: ${(melhor.prob * 100).toFixed(1)}%</p>
                 <p>Odd Mercado: ${melhor.odd}</p>
@@ -183,33 +189,32 @@ function calcular() {
 }
 
 // ===============================
-// PREENCHER EXEMPLO COMPLETO
+// PREENCHER EXEMPLO
 // ===============================
 function preencherExemplo() {
 
-    document.getElementById("favA").value = 60;
+    document.getElementById("favA").value = 55;
     atualizarFavoritismo();
 
-    document.getElementById("mercadoCasa").value = 1.80;
-    document.getElementById("mercadoEmpate").value = 3.50;
-    document.getElementById("mercadoVisitante").value = 4.20;
+    document.getElementById("mercadoCasa").value = 2.10;
+    document.getElementById("mercadoEmpate").value = 3.20;
+    document.getElementById("mercadoVisitante").value = 3.50;
     document.getElementById("mercadoOver").value = 2.00;
-    document.getElementById("mercadoUnder").value = 1.85;
+    document.getElementById("mercadoUnder").value = 1.80;
     document.getElementById("mercadoBTTS").value = 1.95;
 
-    const golsA = [2, 1, 3, 2, 1];
-    const sofridosA = [1, 0, 1, 2, 1];
-    const golsB = [1, 0, 2, 1, 1];
-    const sofridosB = [2, 1, 2, 1, 3];
-    const h2hA = [1, 2, 0, 1, 2];
-    const h2hB = [1, 1, 1, 0, 1];
+    const preencher = (classe, valores) => {
+        document.querySelectorAll(classe).forEach((el, i) => {
+            el.value = valores[i] || 0;
+        });
+    };
 
-    document.querySelectorAll(".golsA").forEach((el, i) => el.value = golsA[i]);
-    document.querySelectorAll(".golsSofridosA").forEach((el, i) => el.value = sofridosA[i]);
-    document.querySelectorAll(".golsB").forEach((el, i) => el.value = golsB[i]);
-    document.querySelectorAll(".golsSofridosB").forEach((el, i) => el.value = sofridosB[i]);
-    document.querySelectorAll(".h2hA").forEach((el, i) => el.value = h2hA[i]);
-    document.querySelectorAll(".h2hB").forEach((el, i) => el.value = h2hB[i]);
+    preencher(".golsA", [2, 1, 3, 1, 2]);
+    preencher(".golsSofridosA", [1, 0, 2, 1, 1]);
+    preencher(".golsB", [1, 2, 0, 1, 1]);
+    preencher(".golsSofridosB", [2, 1, 1, 2, 2]);
+    preencher(".h2hA", [1, 1, 2, 0, 1]);
+    preencher(".h2hB", [1, 0, 1, 1, 1]);
 }
 
 // ===============================
