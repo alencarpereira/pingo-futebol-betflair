@@ -1,10 +1,12 @@
 // ===============================
-// CONFIG
+// CONFIG PROFISSIONAL
 // ===============================
 let chartGols = null;
 let chartPlacares = null;
-const EV_MINIMO = 0.03; // mínimo 3%
+
+const EV_MINIMO = 0.05; // agora mínimo 5%
 const MAX_GOALS = 10;
+const MEDIA_LIGA = 2.4; // média padrão de gols liga (ajuste se quiser)
 
 // ===============================
 // HELPERS
@@ -37,9 +39,9 @@ function calcularEV(prob, odd) {
 }
 
 function classificarEV(ev) {
+    if (ev > 0.12) return { texto: "🟢 VALUE MUITO FORTE", cor: "green" };
     if (ev > 0.08) return { texto: "🟢 VALUE FORTE", cor: "green" };
-    if (ev > 0.05) return { texto: "🟡 VALUE BOA", cor: "orange" };
-    if (ev > 0.03) return { texto: "⚪ VALUE LEVE", cor: "gray" };
+    if (ev > 0.05) return { texto: "🟡 VALUE MODERADA", cor: "orange" };
     return { texto: "🔴 SEM VALOR", cor: "red" };
 }
 
@@ -56,7 +58,7 @@ function atualizarFavoritismo() {
 }
 
 // ===============================
-// CALCULAR
+// CALCULAR MODELO 2.0
 // ===============================
 function calcular() {
 
@@ -70,18 +72,42 @@ function calcular() {
     const favA = (parseFloat(document.getElementById("favA").value) || 50) / 100;
     const favB = 1 - favA;
 
-    let lambdaA = ((golsA + sofridosB) / 2) * (0.75 + favA * 0.5);
-    let lambdaB = ((golsB + sofridosA) / 2) * (0.75 + favB * 0.5);
+    // ===============================
+    // LAMBDAS BASE
+    // ===============================
+    let lambdaA = (golsA + sofridosB) / 2;
+    let lambdaB = (golsB + sofridosA) / 2;
 
-    // Peso confronto direto
+    // ===============================
+    // AJUSTE SUAVE DE FAVORITISMO (menos agressivo)
+    // ===============================
+    lambdaA *= (0.9 + favA * 0.2);
+    lambdaB *= (0.9 + favB * 0.2);
+
+    // ===============================
+    // H2H REDUZIDO (10%)
+    // ===============================
     if (h2hA > 0 || h2hB > 0) {
-        lambdaA = (lambdaA * 0.85) + (h2hA * 0.15);
-        lambdaB = (lambdaB * 0.85) + (h2hB * 0.15);
+        lambdaA = (lambdaA * 0.90) + (h2hA * 0.10);
+        lambdaB = (lambdaB * 0.90) + (h2hB * 0.10);
     }
 
-    lambdaA = Math.max(lambdaA, 0.2);
-    lambdaB = Math.max(lambdaB, 0.2);
+    // ===============================
+    // SHRINK PARA MÉDIA DA LIGA (anti exagero)
+    // ===============================
+    const mediaAtual = lambdaA + lambdaB;
+    const fatorShrink = MEDIA_LIGA / (mediaAtual || 1);
 
+    lambdaA *= (0.7 + 0.3 * fatorShrink);
+    lambdaB *= (0.7 + 0.3 * fatorShrink);
+
+    // piso mínimo
+    lambdaA = Math.max(lambdaA, 0.25);
+    lambdaB = Math.max(lambdaB, 0.25);
+
+    // ===============================
+    // MATRIZ POISSON
+    // ===============================
     let matriz = [];
     let somaTotal = 0;
 
@@ -114,10 +140,18 @@ function calcular() {
         if (p.j > p.i) probB += p.prob;
     });
 
+    // ===============================
+    // TETO DE SEGURANÇA (anti distorção)
+    // ===============================
+    probUnder25 = Math.min(probUnder25, 0.72);
+    probOver25 = Math.min(probOver25, 0.72);
+    probA = Math.min(probA, 0.75);
+    probB = Math.min(probB, 0.75);
+
     const expectativaGols = lambdaA + lambdaB;
 
     // ===============================
-    // ODDS
+    // MERCADOS
     // ===============================
     const mercados = [
         { nome: "Vitória Casa", prob: probA, odd: parseFloat(document.getElementById("mercadoCasa").value) },
@@ -134,9 +168,9 @@ function calcular() {
         if (m.odd && m.odd > 1) {
             m.ev = calcularEV(m.prob, m.odd);
 
-            // FILTRO INTELIGENTE
-            if (m.nome === "Over 2.5" && expectativaGols < 2.2) return;
-            if (m.nome === "Under 2.5" && expectativaGols > 2.8) return;
+            // filtro inteligente
+            if (m.nome === "Over 2.5" && expectativaGols < 2.1) return;
+            if (m.nome === "Under 2.5" && expectativaGols > 2.9) return;
 
             apostas.push(m);
         }
@@ -147,7 +181,7 @@ function calcular() {
     const melhor = apostas.length ? apostas[0] : null;
 
     // ===============================
-    // RESULTADO
+    // OUTPUT
     // ===============================
     let blocoProb = `
         <h3>📊 Probabilidades do Modelo</h3>
@@ -164,24 +198,22 @@ function calcular() {
 
     let blocoAposta = "⚪ Nenhuma odd informada";
 
-    if (melhor) {
+    if (melhor && melhor.ev >= EV_MINIMO) {
         const classificacao = classificarEV(melhor.ev);
 
-        if (melhor.ev < EV_MINIMO) {
-            blocoAposta = `
-                <h3 style="color:red;">🔴 EVENTO SEM VALUE</h3>
-                <p>Sem vantagem estatística relevante.</p>
-            `;
-        } else {
-            blocoAposta = `
-                <h3 style="color:${classificacao.cor};">🎯 MELHOR APOSTA</h3>
-                <p><strong>${melhor.nome}</strong></p>
-                <p>Probabilidade Modelo: ${(melhor.prob * 100).toFixed(1)}%</p>
-                <p>Odd Mercado: ${melhor.odd}</p>
-                <p>EV: ${(melhor.ev * 100).toFixed(2)}%</p>
-                <p><strong>${classificacao.texto}</strong></p>
-            `;
-        }
+        blocoAposta = `
+            <h3 style="color:${classificacao.cor};">🎯 MELHOR APOSTA</h3>
+            <p><strong>${melhor.nome}</strong></p>
+            <p>Probabilidade Modelo: ${(melhor.prob * 100).toFixed(1)}%</p>
+            <p>Odd Mercado: ${melhor.odd}</p>
+            <p>EV: ${(melhor.ev * 100).toFixed(2)}%</p>
+            <p><strong>${classificacao.texto}</strong></p>
+        `;
+    } else {
+        blocoAposta = `
+            <h3 style="color:red;">🔴 SEM VALUE</h3>
+            <p>Nenhuma aposta com vantagem estatística ≥ 5%</p>
+        `;
     }
 
     document.getElementById("resultado").innerHTML =
@@ -221,7 +253,6 @@ function preencherExemplo() {
 // LIMPAR
 // ===============================
 function limpar() {
-
     document.querySelectorAll("input").forEach(input => {
         if (!input.disabled) input.value = "";
     });
@@ -231,7 +262,6 @@ function limpar() {
     document.getElementById("resultado").innerHTML = "";
 }
 
-// ===============================
 window.onload = atualizarFavoritismo;
 
 
