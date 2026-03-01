@@ -183,6 +183,29 @@ table td {
     background-color: #6b7280;
 }
 
+
+/* ============================= */
+/* AJUSTE PARA INPUTS EM TABELA */
+/* ============================= */
+
+table input {
+    width: 50px;
+    padding: 5px;
+    text-align: center;
+    border-radius: 4px;
+    border: none;
+    background-color: #4b5563;
+    color: #f9fafb;
+    font-weight: bold;
+    font-size: 0.85rem;
+}
+
+/* Centraliza melhor a coluna "Jogo" */
+table td:first-child,
+table th:first-child {
+    width: 60px;
+}
+
 /* Responsividade */
 @media (max-width: 700px) {
     .inputs-jogos input {
