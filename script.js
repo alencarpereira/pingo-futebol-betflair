@@ -1,13 +1,12 @@
 // ===============================
-// CONFIG PROFISSIONAL 3.0
+// CONFIG PROFISSIONAL 5.0
 // ===============================
 let chartGols = null;
 let chartPlacares = null;
 
-const EV_MINIMO = 0.05;
 const MAX_GOALS = 10;
 const MEDIA_LIGA = 2.4;
-const PESO_MERCADO = 0.15; // quanto o mercado influencia (0.10 a 0.20 ideal)
+const PESO_MERCADO = 0.15;
 
 // ===============================
 // HELPERS
@@ -39,10 +38,23 @@ function calcularEV(prob, odd) {
     return (prob * odd) - 1;
 }
 
+// ===============================
+// EV DINÂMICO POR FAIXA DE ODD
+// ===============================
+function evMinimoPorOdd(odd) {
+
+    if (odd >= 1.55 && odd <= 1.85) return 0.08; // 8%
+    if (odd > 1.85 && odd <= 2.50) return 0.05;  // 5%
+    if (odd > 2.50 && odd <= 4.20) return 0.03;  // 3%
+
+    return 0.99; // bloqueia fora da faixa
+}
+
 function classificarEV(ev) {
     if (ev > 0.12) return { texto: "🟢 VALUE MUITO FORTE", cor: "green" };
     if (ev > 0.08) return { texto: "🟢 VALUE FORTE", cor: "green" };
     if (ev > 0.05) return { texto: "🟡 VALUE MODERADA", cor: "orange" };
+    if (ev > 0.03) return { texto: "🟠 VALUE LEVE", cor: "orange" };
     return { texto: "🔴 SEM VALOR", cor: "red" };
 }
 
@@ -50,16 +62,19 @@ function classificarEV(ev) {
 // FAVORITISMO
 // ===============================
 function atualizarFavoritismo() {
-    const favA = parseFloat(document.getElementById("favA").value) || 50;
+    const favA = parseFloat(document.getElementById("favA")?.value) || 50;
     const favB = 100 - favA;
 
-    document.getElementById("favB").value = favB;
-    document.getElementById("favValores").innerText =
-        `Time A: ${favA}% — Time B: ${favB}%`;
+    const favBInput = document.getElementById("favB");
+    if (favBInput) favBInput.value = favB;
+
+    const favText = document.getElementById("favValores");
+    if (favText)
+        favText.innerText = `Time A: ${favA}% — Time B: ${favB}%`;
 }
 
 // ===============================
-// CALCULAR MODELO 3.0
+// CALCULAR MODELO
 // ===============================
 function calcular() {
 
@@ -70,41 +85,34 @@ function calcular() {
     const h2hA = mean(getValues(".h2hA"));
     const h2hB = mean(getValues(".h2hB"));
 
-    const favA = (parseFloat(document.getElementById("favA").value) || 50) / 100;
+    const favA = (parseFloat(document.getElementById("favA")?.value) || 50) / 100;
     const favB = 1 - favA;
 
-    // ===============================
-    // LAMBDAS BASE
-    // ===============================
     let lambdaA = (golsA + sofridosB) / 2;
     let lambdaB = (golsB + sofridosA) / 2;
 
-    // Ajuste favoritismo suave
     lambdaA *= (0.9 + favA * 0.2);
     lambdaB *= (0.9 + favB * 0.2);
 
-    // H2H leve (10%)
     if (h2hA > 0 || h2hB > 0) {
-        lambdaA = (lambdaA * 0.90) + (h2hA * 0.10);
-        lambdaB = (lambdaB * 0.90) + (h2hB * 0.10);
+        lambdaA = (lambdaA * 0.9) + (h2hA * 0.1);
+        lambdaB = (lambdaB * 0.9) + (h2hB * 0.1);
     }
 
-    // Shrink para média da liga
     const mediaAtual = lambdaA + lambdaB;
     const fatorShrink = MEDIA_LIGA / (mediaAtual || 1);
+
     lambdaA *= (0.7 + 0.3 * fatorShrink);
     lambdaB *= (0.7 + 0.3 * fatorShrink);
 
-    // ===============================
-    // CALIBRAÇÃO PELO MERCADO (NOVO)
-    // ===============================
-    const oddCasa = parseFloat(document.getElementById("mercadoCasa").value);
-    const oddVisitante = parseFloat(document.getElementById("mercadoVisitante").value);
+    // CALIBRAÇÃO MERCADO
+    const oddCasa = parseFloat(document.getElementById("mercadoCasa")?.value);
+    const oddVisitante = parseFloat(document.getElementById("mercadoVisitante")?.value);
 
     if (oddCasa > 1 && oddVisitante > 1) {
 
-        const probMercadoCasa = (1 / oddCasa);
-        const probMercadoVisitante = (1 / oddVisitante);
+        const probMercadoCasa = 1 / oddCasa;
+        const probMercadoVisitante = 1 / oddVisitante;
         const soma = probMercadoCasa + probMercadoVisitante;
 
         const ajusteCasa = probMercadoCasa / soma;
@@ -117,9 +125,7 @@ function calcular() {
     lambdaA = Math.max(lambdaA, 0.25);
     lambdaB = Math.max(lambdaB, 0.25);
 
-    // ===============================
-    // MATRIZ POISSON
-    // ===============================
+    // MATRIZ
     let matriz = [];
     let somaTotal = 0;
 
@@ -133,12 +139,8 @@ function calcular() {
 
     matriz = matriz.map(p => ({ ...p, prob: p.prob / somaTotal }));
 
-    let probOver25 = 0;
-    let probUnder25 = 0;
-    let probBTTS = 0;
-    let probA = 0;
-    let probEmpate = 0;
-    let probB = 0;
+    let probOver25 = 0, probUnder25 = 0, probBTTS = 0;
+    let probA = 0, probEmpate = 0, probB = 0;
 
     matriz.forEach(p => {
         if (p.i + p.j >= 3) probOver25 += p.prob;
@@ -151,66 +153,34 @@ function calcular() {
         if (p.j > p.i) probB += p.prob;
     });
 
-    // Teto anti-distorção
-    probUnder25 = Math.min(probUnder25, 0.72);
-    probOver25 = Math.min(probOver25, 0.72);
-    probA = Math.min(probA, 0.75);
-    probB = Math.min(probB, 0.75);
-
     const expectativaGols = lambdaA + lambdaB;
 
-    // ===============================
-    // MERCADOS
-    // ===============================
     const mercados = [
         { nome: "Vitória Casa", prob: probA, odd: oddCasa },
-        { nome: "Empate", prob: probEmpate, odd: parseFloat(document.getElementById("mercadoEmpate").value) },
+        { nome: "Empate", prob: probEmpate, odd: parseFloat(document.getElementById("mercadoEmpate")?.value) },
         { nome: "Vitória Visitante", prob: probB, odd: oddVisitante },
-        { nome: "Over 2.5", prob: probOver25, odd: parseFloat(document.getElementById("mercadoOver").value) },
-        { nome: "Under 2.5", prob: probUnder25, odd: parseFloat(document.getElementById("mercadoUnder").value) },
-        { nome: "BTTS", prob: probBTTS, odd: parseFloat(document.getElementById("mercadoBTTS").value) }
+        { nome: "Over 2.5", prob: probOver25, odd: parseFloat(document.getElementById("mercadoOver")?.value) },
+        { nome: "Under 2.5", prob: probUnder25, odd: parseFloat(document.getElementById("mercadoUnder")?.value) },
+        { nome: "BTTS", prob: probBTTS, odd: parseFloat(document.getElementById("mercadoBTTS")?.value) }
     ];
 
-    let apostas = [];
-
-    mercados.forEach(m => {
-        if (m.odd && m.odd > 1) {
-            m.ev = calcularEV(m.prob, m.odd);
-
-            if (m.nome === "Over 2.5" && expectativaGols < 2.1) return;
-            if (m.nome === "Under 2.5" && expectativaGols > 2.9) return;
-
-            apostas.push(m);
-        }
-    });
-
-    // ===============================
-    // FILTRO PROFISSIONAL DE SAÍDA
-    // ===============================
-    let apostasFiltradas = apostas.filter(m => {
+    let apostasFiltradas = mercados.filter(m => {
 
         if (!m.odd || m.odd <= 1) return false;
 
-        // 1️⃣ Probabilidade mínima
-        if (m.prob < 0.45) return false;
+        const ev = calcularEV(m.prob, m.odd);
+        const evMin = evMinimoPorOdd(m.odd);
 
-        // 2️⃣ EV mínimo
-        if (m.ev < EV_MINIMO) return false;
+        if (m.prob < 0.48) return false;
+        if (ev < evMin) return false;
 
-        // 3️⃣ Faixa de odd permitida
-        if (m.odd < 1.50 || m.odd > 4.50) return false;
-
+        m.ev = ev;
         return true;
     });
 
-    // Ordena pelo maior EV apenas entre as filtradas
     apostasFiltradas.sort((a, b) => b.ev - a.ev);
-
     const melhor = apostasFiltradas.length ? apostasFiltradas[0] : null;
 
-    // ===============================
-    // OUTPUT
-    // ===============================
     let blocoProb = `
         <h3>📊 Probabilidades do Modelo</h3>
         <p>Vitória A: ${(probA * 100).toFixed(1)}%</p>
@@ -224,10 +194,7 @@ function calcular() {
         <p><strong>Expectativa de Gols:</strong> ${expectativaGols.toFixed(2)}</p>
     `;
 
-    let blocoAposta = `
-        <h3 style="color:red;">🔴 SEM VALUE</h3>
-        <p>Nenhuma aposta com vantagem ≥ 5%</p>
-    `;
+    let blocoAposta = `<h3 style="color:red;">🔴 SEM VALUE</h3>`;
 
     if (melhor) {
         const classificacao = classificarEV(melhor.ev);
@@ -242,10 +209,12 @@ function calcular() {
         `;
     }
 
-    document.getElementById("resultado").innerHTML =
-        blocoProb + "<hr>" + blocoAposta;
+    document.getElementById("resultado").innerHTML = blocoProb + "<hr>" + blocoAposta;
 }
 
+// ===============================
+// PREENCHER EXEMPLO
+// ===============================
 function preencherExemplo() {
 
     document.getElementById("favA").value = 55;
@@ -260,7 +229,7 @@ function preencherExemplo() {
 
     const preencher = (classe, valores) => {
         document.querySelectorAll(classe).forEach((el, i) => {
-            el.value = valores[i] || 0;
+            el.value = valores[i] ?? "";
         });
     };
 
@@ -273,24 +242,18 @@ function preencherExemplo() {
 }
 
 // ===============================
-// LIMPAR CAMPOS
+// LIMPAR
 // ===============================
 function limpar() {
 
-    // limpa todos os inputs que não são disabled
     document.querySelectorAll("input").forEach(input => {
-        if (!input.disabled) {
-            input.value = "";
-        }
+        if (!input.disabled) input.value = "";
     });
 
-    // reseta favoritismo
     document.getElementById("favA").value = 50;
     atualizarFavoritismo();
 
-    // limpa resultado
-    const resultado = document.getElementById("resultado");
-    if (resultado) resultado.innerHTML = "";
+    document.getElementById("resultado").innerHTML = "";
 }
 
 window.onload = atualizarFavoritismo;
