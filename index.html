@@ -12,65 +12,52 @@
     <div class="container">
 
         <h2>⚽ Calculadora de Gols - Modelo Poisson Profissional</h2>
-
-        <!-- ================= FAVORITISMO ================= -->
-        <div class="card favoritismo-container">
-            <label>Peso de Favoritismo</label>
-
-            <input type="range" id="favA" min="0" max="100" value="50" oninput="atualizarFavoritismo()">
-
-            <input type="number" id="favB" value="50" disabled>
-
-            <div id="favValores" class="fav-texto">
-                Time A: 50% — Time B: 50%
-            </div>
-        </div>
+        <br>
 
         <!-- ================= MERCADO (ODDS) ================= -->
+
         <div class="card">
+
+            <!-- Adicione isso dentro do card "Odds do Mercado", pode ser logo acima do grid -->
+            <div style="margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid #eee;">
+                <label>💰 <b>Valor Total da Aposta (R$):</b> </label>
+                <input type="number" id="valorApostaTotal" value="100" step="10"
+                    style="width: 100px; font-weight: bold; color: #2e7d32;">
+            </div>
+
             <h3>📈 Odds do Mercado</h3>
-
             <div class="mercado-grid">
-
                 <div>
                     <label>Vitória Casa</label>
                     <input type="number" id="mercadoCasa" step="0.01" placeholder="1.85">
                 </div>
-
                 <div>
                     <label>Empate</label>
                     <input type="number" id="mercadoEmpate" step="0.01" placeholder="3.40">
                 </div>
-
                 <div>
                     <label>Vitória Visitante</label>
                     <input type="number" id="mercadoVisitante" step="0.01" placeholder="4.20">
                 </div>
-
                 <div>
                     <label>Over 2.5</label>
                     <input type="number" id="mercadoOver" step="0.01" placeholder="2.00">
                 </div>
-
                 <div>
                     <label>Under 2.5</label>
                     <input type="number" id="mercadoUnder" step="0.01" placeholder="1.85">
                 </div>
-
                 <div>
                     <label>BTTS</label>
                     <input type="number" id="mercadoBTTS" step="0.01" placeholder="1.95">
                 </div>
-
             </div>
         </div>
 
-        <!-- ================= DADOS DOS TIMES ================= -->
+        <!-- ================= DADOS DOS TIMES (MANTIDO) ================= -->
         <div class="card">
-
             <div class="coluna">
                 <h4>Time A - Últimos 5 Jogos</h4>
-
                 <table>
                     <tr>
                         <th>Jogo</th>
@@ -107,7 +94,6 @@
 
             <div class="coluna">
                 <h4>Time B - Últimos 5 Jogos</h4>
-
                 <table>
                     <tr>
                         <th>Jogo</th>
@@ -141,12 +127,11 @@
                     </tr>
                 </table>
             </div>
-
         </div>
-        <!-- ================= CONFRONTO DIRETO ================= -->
+
+        <!-- ================= CONFRONTO DIRETO (MANTIDO) ================= -->
         <div class="card">
             <h4>Confronto Direto - Últimos 5 Jogos</h4>
-
             <table class="tabela-jogos">
                 <thead>
                     <tr>
@@ -192,8 +177,24 @@
             <button class="btn-limpar" onclick="limpar()">Limpar</button>
         </div>
 
-        <!-- ================= RESULTADO ================= -->
+        <!-- ================= RESULTADO PRINCIPAL ================= -->
         <div id="resultado" class="card"></div>
+
+        <!-- ================= NOVA SEÇÃO: ESTRATÉGIA DE COBERTURA ================= -->
+        <div id="cobertura" class="card cobertura-card" style="display: none;">
+            <h3 style="color: #1565C0;">🛡️ Sugestão de Cobertura (Hedge)</h3>
+            <div id="coberturaTexto"></div>
+        </div>
+
+        <div id="cobertura" class="card cobertura-card" style="display: none;">
+            <h3 style="color: #1565C0;">🛡️ Estratégia de Cobertura & Gestão</h3>
+            <div id="coberturaTexto"></div>
+            <hr>
+            <div id="calculoStake" style="background: #e3f2fd; padding: 10px; border-radius: 8px;">
+                <!-- Valores de Stake aparecerão aqui -->
+            </div>
+        </div>
+
 
         <!-- ================= GRÁFICOS ================= -->
         <canvas id="graficoGols" height="150"></canvas>
