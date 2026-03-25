@@ -65,6 +65,23 @@ function verificarValor(oddMercado, oddJusta) {
     return `<span style="color:#c62828;">${ev.toFixed(1)}%</span>`;
 }
 
+// ==============================
+// AJUSTE DE EV PELA CONFIANÇA
+// ==============================
+
+function ajustarEV(ev, confianca) {
+
+    let fator = 1;
+
+    if (confianca < 50) fator = 0.40;
+    else if (confianca < 55) fator = 0.55;
+    else if (confianca < 60) fator = 0.70;
+    else if (confianca < 65) fator = 0.85;
+    else fator = 1;
+
+    return ev * fator;
+}
+
 // ===============================
 // CORE: CALCULAR
 // ===============================
@@ -95,7 +112,6 @@ function calcular() {
         (defesaA * 0.35) +
         (hB * 0.15);
 
-    // proteção para evitar valores muito baixos
     lambdaA = Math.max(0.2, lambdaA);
     lambdaB = Math.max(0.2, lambdaB);
 
@@ -109,8 +125,8 @@ function calcular() {
         btts: Number(document.getElementById("mercadoBTTS").value)
     };
 
-    // ajuste pelo mercado
     if (oddCasa && oddFora) {
+
         const pMercadoA = probOdd(oddCasa);
         const pMercadoB = probOdd(oddFora);
         const total = pMercadoA + pMercadoB;
@@ -120,7 +136,6 @@ function calcular() {
         lambdaB *= (1 - (pesoA - 0.5) * 0.15);
     }
 
-    // 🔒 limite máximo para evitar distorções
     lambdaA = Math.min(3.5, lambdaA);
     lambdaB = Math.min(3.5, lambdaB);
 
@@ -156,31 +171,35 @@ function calcular() {
     const resBTTS = pBTTS * 100;
 
     placares.sort((a, b) => b.val - a.val);
+
     const fairCasa = resA > 0 ? (100 / resA).toFixed(2) : "-";
     const fairEmpate = resEmp > 0 ? (100 / resEmp).toFixed(2) : "-";
     const fairOver = resOver > 0 ? (100 / resOver).toFixed(2) : "-";
     const fairBTTS = resBTTS > 0 ? (100 / resBTTS).toFixed(2) : "-";
-
     const fairVisitante = resB > 0 ? (100 / resB).toFixed(2) : "-";
 
     const evCasa = fairCasa !== "-" ? ((oddCasa / Number(fairCasa)) - 1) * 100 : 0;
     const evEmpate = fairEmpate !== "-" ? ((oddsMercado.empate / Number(fairEmpate)) - 1) * 100 : 0;
     const evVisitante = fairVisitante !== "-" ? ((oddFora / Number(fairVisitante)) - 1) * 100 : 0;
 
-    let melhorMercado = "Casa";
-    let melhorEV = evCasa;
+    const confianca = Number((resA * 0.7 + (100 - resB) * 0.3).toFixed(0));
 
-    if (evEmpate > melhorEV) {
-        melhorEV = evEmpate;
+    const evCasaFinal = ajustarEV(evCasa, confianca);
+    const evEmpateFinal = ajustarEV(evEmpate, confianca);
+    const evVisitanteFinal = ajustarEV(evVisitante, confianca);
+
+    let melhorMercado = "Casa";
+    let melhorEV = evCasaFinal;
+
+    if (evEmpateFinal > melhorEV) {
+        melhorEV = evEmpateFinal;
         melhorMercado = "Empate";
     }
 
-    if (evVisitante > melhorEV) {
-        melhorEV = evVisitante;
+    if (evVisitanteFinal > melhorEV) {
+        melhorEV = evVisitanteFinal;
         melhorMercado = "Visitante";
     }
-
-    const confianca = (resA * 0.7 + (100 - resB) * 0.3).toFixed(0);
 
     let veredito = "";
 
