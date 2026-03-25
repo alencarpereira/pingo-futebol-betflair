@@ -156,25 +156,41 @@ function calcular() {
     const resBTTS = pBTTS * 100;
 
     placares.sort((a, b) => b.val - a.val);
-
     const fairCasa = resA > 0 ? (100 / resA).toFixed(2) : "-";
     const fairEmpate = resEmp > 0 ? (100 / resEmp).toFixed(2) : "-";
     const fairOver = resOver > 0 ? (100 / resOver).toFixed(2) : "-";
     const fairBTTS = resBTTS > 0 ? (100 / resBTTS).toFixed(2) : "-";
 
-    const evCasa = ((oddCasa / fairCasa) - 1) * 100;
+    const fairVisitante = resB > 0 ? (100 / resB).toFixed(2) : "-";
+
+    const evCasa = fairCasa !== "-" ? ((oddCasa / Number(fairCasa)) - 1) * 100 : 0;
+    const evEmpate = fairEmpate !== "-" ? ((oddsMercado.empate / Number(fairEmpate)) - 1) * 100 : 0;
+    const evVisitante = fairVisitante !== "-" ? ((oddFora / Number(fairVisitante)) - 1) * 100 : 0;
+
+    let melhorMercado = "Casa";
+    let melhorEV = evCasa;
+
+    if (evEmpate > melhorEV) {
+        melhorEV = evEmpate;
+        melhorMercado = "Empate";
+    }
+
+    if (evVisitante > melhorEV) {
+        melhorEV = evVisitante;
+        melhorMercado = "Visitante";
+    }
 
     const confianca = (resA * 0.7 + (100 - resB) * 0.3).toFixed(0);
 
     let veredito = "";
 
-    if (evCasa >= 5 && confianca >= 60) {
+    if (melhorEV >= 5 && confianca >= 60) {
         veredito = "🔥 ENTRADA FORTE (VALOR + CONFIANÇA)";
     }
-    else if (evCasa > 0 && confianca >= 55) {
+    else if (melhorEV > 0 && confianca >= 55) {
         veredito = "✅ ENTRADA PADRÃO (VALOR IDENTIFICADO)";
     }
-    else if (evCasa > 10) {
+    else if (melhorEV > 10) {
         veredito = "⚠️ VALOR ALTO MAS RISCO ELEVADO";
     }
     else {
@@ -209,6 +225,9 @@ function calcular() {
     document.getElementById("resultado").innerHTML = `
 
 <b>${veredito}</b><br><br>
+
+🔥 <b>MELHOR VALOR:</b> ${melhorMercado}<br>
+📈 <b>EV:</b> ${melhorEV.toFixed(1)}%<br><br>
 
 📊 <b>PREÇO JUSTO vs MERCADO</b><br>
 Casa → ${verificarValor(oddCasa, fairCasa)}<br>
